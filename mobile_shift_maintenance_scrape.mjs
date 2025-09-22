@@ -191,9 +191,33 @@ async function run() {
 
   // Go to page (should already be there from auth test, but ensure we're on the right page)
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle').catch(() => {});
 
-  // Sanity check key widgets exist
-  await page.waitForSelector('#dtpStartDate', { timeout: 20000 });
+  // Handle potential OIDC/login redirects by retrying navigation until widgets appear
+  {
+    const MAX_TRIES = 5;
+    let ready = false;
+    for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+      const visible = await page.locator('#dtpStartDate').isVisible({ timeout: 5000 }).catch(() => false);
+      if (visible) { ready = true; break; }
+      const urlNow = page.url();
+      if (/signin-oidc|\/Account\/Login/i.test(urlNow)) {
+        await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
+        await page.waitForLoadState('networkidle').catch(() => {});
+      } else {
+        // soft reload to encourage Kendo boot
+        await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
+        await page.waitForLoadState('networkidle').catch(() => {});
+      }
+      await page.waitForTimeout(1000);
+    }
+    if (!ready) {
+      await debugDump(page, 'GRID-WIDGETS-NOT-READY');
+      throw new Error('Could not find date pickers after redirects/retries');
+    }
+  }
+
+  // Sanity check key widgets exist (dtpStartDate already probed above)
   await page.waitForSelector('#dtpEndDate',   { timeout: 20000 });
   await page.waitForSelector('#btnSearch', { timeout: 20000 });
   
