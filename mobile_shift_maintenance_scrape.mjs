@@ -331,6 +331,9 @@ async function run() {
     'Adjusted Start',
     'Adjusted End',
     'Adjusted Hrs',
+    // Exception columns (add both common variants)
+    'Exception Type',
+    'Exception Types',
     // Add more labels here if the grid shows them for you (e.g., 'Payor', 'Pay', etc.)
   ];
 
