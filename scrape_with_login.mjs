@@ -1,7 +1,6 @@
 // scrape_month_block_with_login.mjs — login → Month tab → Month Block View → scrape shift cards w/ solid date + payer
 import { chromium } from 'playwright';
 import { writeFile } from 'fs/promises';
-import readline from 'readline';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -21,18 +20,7 @@ const CARD_SELECTORS = [
 
 const norm = (t) => (t ?? '').replace(/\s+/g, ' ').trim();
 
-async function prompt(question, { mask = false } = {}) {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-  return await new Promise((resolve) => {
-    if (!mask) return rl.question(question, (ans) => { rl.close(); resolve(ans); });
-    process.stdin.on('data', c => {
-      c = c.toString();
-      if (c === '\n' || c === '\r' || c === '\u0004') { process.stdout.write('\n'); rl.close(); }
-      else process.stdout.write('*');
-    });
-    rl.question(question, (ans) => resolve(ans));
-  });
-}
+// No interactive prompts; rely on .env
 
 async function assertNotBlocked(page, where) {
   const title = (await page.title()).toLowerCase();
@@ -349,11 +337,14 @@ async function switchToMonth(page) {
 }
 
 (async () => {
-  // creds
-  let user = process.env.ABS_USER;
-  let pass = process.env.ABS_PASS;
-  if (!user) user = await prompt('ABS username: ');
-  if (!pass) pass = await prompt('ABS password: ', { mask: true });
+  // creds from .env only
+  const user = process.env.ABS_USER;
+  const pass = process.env.ABS_PASS;
+  if (!user || !pass) {
+    console.error('Missing credentials. Please set ABS_USER and ABS_PASS in a .env file.');
+    console.error('Example:\nABS_USER=your.username\nABS_PASS=your.password');
+    process.exit(1);
+  }
 
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox','--disable-dev-shm-usage'] });
   const context = await browser.newContext({
