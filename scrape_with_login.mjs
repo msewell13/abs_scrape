@@ -212,11 +212,15 @@ async function extractCard(el, page, monthYearHint) {
 
   // ---- fields already working for you ----
   const time = await pickText(el, '.timeelement, .time, .shift-time');
-  const client = await pickText(el, '.customerTag a, .customerTag, .client a, .client');
-  const employee = await pickText(el, '.employeeTag a, .employeeTag, .employee a, .employee');
-  const payer = await pickText(el, '.productTag a, .productTag');
+  let client = await pickText(el, '.customerTag a, .customerTag, .client a, .client');
+  let employee = await pickText(el, '.employeeTag a, .employeeTag, .employee a, .employee');
+  const product = await pickText(el, '.productTag a, .productTag');
   const bill_rate = await pickText(el, '.bill-rate, .billRate');
   const pay_rate = await pickText(el, '.pay-rate, .payRate');
+
+  // Clean up prefixes
+  if (client && client.startsWith('C:')) client = client.substring(2).trim();
+  if (employee && employee.startsWith('E:')) employee = employee.substring(2).trim();
 
   // location via bold "L:"
   let location = null;
@@ -284,7 +288,7 @@ async function extractCard(el, page, monthYearHint) {
     } catch {}
   }
 
-  return { date, time, start_time, end_time, client, employee, location, payer, bill_rate, pay_rate };
+  return { date, time, start_time, end_time, client, employee, location, product, bill_rate, pay_rate };
 }
 
 
