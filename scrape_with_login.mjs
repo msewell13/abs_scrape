@@ -235,16 +235,22 @@ async function extractCard(el, page, monthYearHint) {
       // Check for red indicators (Open status)
       const isRed = backgroundColor.includes('rgb(255, 0, 0)') || 
                    backgroundColor.includes('rgb(220, 53, 69)') ||
+                   backgroundColor.includes('rgb(163, 0, 19)') ||
                    backgroundColor.includes('#dc3545') ||
                    backgroundColor.includes('#ff0000') ||
+                   backgroundColor.includes('#a30013') ||
                    borderColor.includes('rgb(255, 0, 0)') ||
                    borderColor.includes('rgb(220, 53, 69)') ||
+                   borderColor.includes('rgb(163, 0, 19)') ||
                    borderColor.includes('#dc3545') ||
                    borderColor.includes('#ff0000') ||
+                   borderColor.includes('#a30013') ||
                    color.includes('rgb(255, 0, 0)') ||
                    color.includes('rgb(220, 53, 69)') ||
+                   color.includes('rgb(163, 0, 19)') ||
                    color.includes('#dc3545') ||
-                   color.includes('#ff0000');
+                   color.includes('#ff0000') ||
+                   color.includes('#a30013');
       
       // Check for green indicators (Assigned status)
       const isGreen = backgroundColor.includes('rgb(0, 128, 0)') ||
@@ -260,6 +266,24 @@ async function extractCard(el, page, monthYearHint) {
                      color.includes('#28a745') ||
                      color.includes('#008000');
       
+      // Check for completed indicators (blue, gray, or other neutral colors)
+      const isCompleted = backgroundColor.includes('rgb(0, 0, 255)') ||
+                         backgroundColor.includes('rgb(70, 130, 180)') ||
+                         backgroundColor.includes('rgb(128, 128, 128)') ||
+                         backgroundColor.includes('rgb(169, 169, 169)') ||
+                         backgroundColor.includes('#0000ff') ||
+                         backgroundColor.includes('#4682b4') ||
+                         backgroundColor.includes('#808080') ||
+                         backgroundColor.includes('#a9a9a9') ||
+                         borderColor.includes('rgb(0, 0, 255)') ||
+                         borderColor.includes('rgb(70, 130, 180)') ||
+                         borderColor.includes('rgb(128, 128, 128)') ||
+                         borderColor.includes('rgb(169, 169, 169)') ||
+                         borderColor.includes('#0000ff') ||
+                         borderColor.includes('#4682b4') ||
+                         borderColor.includes('#808080') ||
+                         borderColor.includes('#a9a9a9');
+      
       // Check for CSS classes that might indicate status
       const classList = Array.from(node.classList);
       const hasOpenClass = classList.some(cls => 
@@ -268,12 +292,17 @@ async function extractCard(el, page, monthYearHint) {
       const hasAssignedClass = classList.some(cls => 
         /assigned|filled|confirmed|scheduled/i.test(cls)
       );
+      const hasCompletedClass = classList.some(cls => 
+        /completed|finished|done/i.test(cls)
+      );
       
       return {
         isRed,
         isGreen,
+        isCompleted,
         hasOpenClass,
         hasAssignedClass,
+        hasCompletedClass,
         backgroundColor,
         borderColor,
         color,
@@ -285,7 +314,10 @@ async function extractCard(el, page, monthYearHint) {
       status = 'Open';
     } else if (statusInfo.isGreen || statusInfo.hasAssignedClass) {
       status = 'Assigned';
+    } else if (statusInfo.isCompleted || statusInfo.hasCompletedClass) {
+      status = 'Completed';
     }
+    
   } catch (error) {
     // If status detection fails, continue without it
     console.log('Status detection failed for one card:', error.message);
