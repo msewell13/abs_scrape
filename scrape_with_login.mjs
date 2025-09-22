@@ -222,6 +222,75 @@ async function extractCard(el, page, monthYearHint) {
   if (client && client.startsWith('C:')) client = client.substring(2).trim();
   if (employee && employee.startsWith('E:')) employee = employee.substring(2).trim();
 
+  // Extract status based on color coding
+  let status = null;
+  try {
+    const statusInfo = await el.evaluate((node) => {
+      // Check for common status indicators
+      const computedStyle = window.getComputedStyle(node);
+      const backgroundColor = computedStyle.backgroundColor;
+      const borderColor = computedStyle.borderColor;
+      const color = computedStyle.color;
+      
+      // Check for red indicators (Open status)
+      const isRed = backgroundColor.includes('rgb(255, 0, 0)') || 
+                   backgroundColor.includes('rgb(220, 53, 69)') ||
+                   backgroundColor.includes('#dc3545') ||
+                   backgroundColor.includes('#ff0000') ||
+                   borderColor.includes('rgb(255, 0, 0)') ||
+                   borderColor.includes('rgb(220, 53, 69)') ||
+                   borderColor.includes('#dc3545') ||
+                   borderColor.includes('#ff0000') ||
+                   color.includes('rgb(255, 0, 0)') ||
+                   color.includes('rgb(220, 53, 69)') ||
+                   color.includes('#dc3545') ||
+                   color.includes('#ff0000');
+      
+      // Check for green indicators (Assigned status)
+      const isGreen = backgroundColor.includes('rgb(0, 128, 0)') ||
+                     backgroundColor.includes('rgb(40, 167, 69)') ||
+                     backgroundColor.includes('#28a745') ||
+                     backgroundColor.includes('#008000') ||
+                     borderColor.includes('rgb(0, 128, 0)') ||
+                     borderColor.includes('rgb(40, 167, 69)') ||
+                     borderColor.includes('#28a745') ||
+                     borderColor.includes('#008000') ||
+                     color.includes('rgb(0, 128, 0)') ||
+                     color.includes('rgb(40, 167, 69)') ||
+                     color.includes('#28a745') ||
+                     color.includes('#008000');
+      
+      // Check for CSS classes that might indicate status
+      const classList = Array.from(node.classList);
+      const hasOpenClass = classList.some(cls => 
+        /open|unassigned|available|pending/i.test(cls)
+      );
+      const hasAssignedClass = classList.some(cls => 
+        /assigned|filled|confirmed|scheduled/i.test(cls)
+      );
+      
+      return {
+        isRed,
+        isGreen,
+        hasOpenClass,
+        hasAssignedClass,
+        backgroundColor,
+        borderColor,
+        color,
+        classList: classList.join(' ')
+      };
+    });
+    
+    if (statusInfo.isRed || statusInfo.hasOpenClass) {
+      status = 'Open';
+    } else if (statusInfo.isGreen || statusInfo.hasAssignedClass) {
+      status = 'Assigned';
+    }
+  } catch (error) {
+    // If status detection fails, continue without it
+    console.log('Status detection failed for one card:', error.message);
+  }
+
   // location via bold "L:"
   let location = null;
   for (const b of await el.$$('b')) {
@@ -288,7 +357,7 @@ async function extractCard(el, page, monthYearHint) {
     } catch {}
   }
 
-  return { date, time, start_time, end_time, client, employee, location, product, bill_rate, pay_rate };
+  return { date, time, start_time, end_time, client, employee, location, product, bill_rate, pay_rate, status };
 }
 
 
