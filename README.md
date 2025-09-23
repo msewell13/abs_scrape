@@ -57,26 +57,36 @@ This installs `playwright` and `dotenv` used by the scripts.
 ## Set credentials with .env (recommended)
 
 Create a file named `.env` in the project root with:
+
+### ABS Portal Credentials
 ```env
 ABS_USER=your_username
 ABS_PASS=your_password
+```
+
+### Monday.com Integration (for schedule scraper)
+```env
+MONDAY_API_TOKEN=your_monday_api_token
+MONDAY_BOARD_ID=your_board_id  # Optional: specify existing board
 ```
 
 Alternative: set env vars in the shell for one session
 
 - Windows (PowerShell):
 ```powershell
-$env:ABS_USER="your_username"; $env:ABS_PASS="your_password"
+$env:ABS_USER="your_username"; $env:ABS_PASS="your_password"; $env:MONDAY_API_TOKEN="your_token"; $env:MONDAY_BOARD_ID="your_board_id"
 ```
 
 - macOS/Linux (bash/zsh):
 ```bash
-export ABS_USER="your_username" ABS_PASS="your_password"
+export ABS_USER="your_username" ABS_PASS="your_password" MONDAY_API_TOKEN="your_token" MONDAY_BOARD_ID="your_board_id"
 ```
 
 Notes:
 - Keep `.env` private (do not commit it).
 - Shell env vars override `.env` for that session.
+- Get your Monday.com API token from: Account Settings → API → Generate new token
+- Board ID can be found in the Monday.com board URL or left empty to auto-create
 
 ---
 
