@@ -290,10 +290,10 @@ class MondayIntegration {
         
         // Handle special column types
         if (column.type === 'status') {
-          // Use the predefined status ID instead of creating custom labels
+          // Use the predefined status ID - Monday.com expects just the ID number
           const statusId = STATUS_IDS[value];
           if (statusId !== undefined) {
-            columnValue = JSON.stringify({ label: statusId });
+            columnValue = statusId.toString();
           } else {
             // Skip this field if status is not recognized
             continue;
