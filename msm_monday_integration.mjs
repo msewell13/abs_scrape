@@ -1,0 +1,330 @@
+// msm_monday_integration.mjs
+// Integration to send MSM scraped data to Monday.com
+// Creates a board with columns matching the MSM JSON structure and adds new items
+
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const MONDAY_API_URL = 'https://api.monday.com/v2';
+const MONDAY_API_TOKEN = process.env.MONDAY_API_TOKEN;
+const BOARD_NAME = 'MSM Shift Data';
+const BOARD_ID = process.env.MONDAY_MSM_BOARD_ID; // Optional: specify existing board ID
+
+// Column type mapping for MSM data
+const COLUMN_MAPPINGS = {
+  'Date': 'date',
+  'Customer': 'text',
+  'Employee': 'text',
+  'Sch Start': 'text',
+  'Sch End': 'text',
+  'Sch Hrs': 'text',
+  'Actual Start': 'text',
+  'Actual End': 'text',
+  'Actual Hrs': 'text',
+  'Adjusted Start': 'text',
+  'Adjusted End': 'text',
+  'Adjusted Hrs': 'text',
+  'Exception Type': 'text'
+};
+
+class MSMMondayIntegration {
+  constructor() {
+    if (!MONDAY_API_TOKEN) {
+      throw new Error('MONDAY_API_TOKEN environment variable is required');
+    }
+    this.headers = {
+      'Authorization': MONDAY_API_TOKEN,
+      'Content-Type': 'application/json',
+      'API-Version': '2024-07'
+    };
+  }
+
+  async makeRequest(query, variables = {}) {
+    const response = await fetch(MONDAY_API_URL, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify({
+        query,
+        variables
+      })
+    });
+
+    const result = await response.json();
+    
+    if (result.errors) {
+      throw new Error(`Monday.com API Error: ${JSON.stringify(result.errors)}`);
+    }
+    
+    return result.data;
+  }
+
+  async findBoardByName(boardName) {
+    const query = `
+      query {
+        boards(limit: 200) {
+          id
+          name
+        }
+      }
+    `;
+    
+    const data = await this.makeRequest(query);
+    return data.boards.find(board => board.name === boardName);
+  }
+
+  async getBoardColumns(boardId) {
+    const query = `
+      query {
+        boards(ids: [${boardId}]) {
+          columns {
+            id
+            title
+            type
+          }
+        }
+      }
+    `;
+    
+    const data = await this.makeRequest(query);
+    return data.boards[0].columns;
+  }
+
+  async getBoardItems(boardId) {
+    const allItems = [];
+    let cursor = null;
+    const limit = 500; // Monday.com API limit
+
+    do {
+      const query = `
+        query {
+          boards(ids: [${boardId}]) {
+            items_page(limit: ${limit}${cursor ? `, cursor: "${cursor}"` : ''}) {
+              items {
+                id
+                name
+                column_values {
+                  id
+                  text
+                }
+              }
+              cursor
+            }
+          }
+        }
+      `;
+      const data = await this.makeRequest(query);
+      const itemsPage = data.boards[0].items_page;
+      allItems.push(...itemsPage.items);
+      cursor = itemsPage.cursor;
+      console.log(`Fetched ${itemsPage.items.length} items (total: ${allItems.length})`);
+      
+    } while (cursor);
+    
+    return allItems;
+  }
+
+  async deleteAllItems(boardId) {
+    console.log('Clearing existing MSM data from board...');
+    
+    // Get all items first
+    const items = await this.getBoardItems(boardId);
+    if (items.length === 0) {
+      console.log('No items to delete');
+      return;
+    }
+    
+    console.log(`Deleting ${items.length} existing items...`);
+    
+    // Delete items one by one (Monday.com API only supports delete_item singular)
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      
+      const query = `
+        mutation DeleteItem($itemId: ID!) {
+          delete_item(item_id: $itemId) {
+            id
+          }
+        }
+      `;
+      
+      const variables = { itemId: item.id };
+      
+      try {
+        await this.makeRequest(query, variables);
+        console.log(`Deleted item ${i + 1}/${items.length}: ${item.name}`);
+        
+        // Add small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        console.error(`Failed to delete item ${item.name}:`, error.message);
+        // Continue with other items even if one fails
+      }
+    }
+    
+    console.log('✅ MSM board cleared successfully');
+  }
+
+  async createItem(boardId, itemData, columns, itemName) {
+    // Use the provided item name (date with customer/employee for uniqueness)
+    const safeItemName = itemName.replace(/"/g, '\\"');
+    
+    // Map data to column values
+    const columnValues = {};
+    
+    for (const [key, value] of Object.entries(itemData)) {
+      const column = columns.find(col => col.title === key);
+      if (column && value !== null) {
+        let columnValue = value;
+        
+        // Handle special column types
+        if (column.type === 'date') {
+          // Convert date to Monday.com format (YYYY-MM-DD)
+          columnValue = value;
+        }
+        
+        columnValues[column.id] = columnValue;
+      }
+    }
+
+    // Use variables to avoid GraphQL syntax issues
+    const variables = {
+      boardId: boardId,
+      itemName: safeItemName,
+      columnValues: JSON.stringify(columnValues)
+    };
+
+    const query = `
+      mutation CreateItem($boardId: ID!, $itemName: String!, $columnValues: JSON!) {
+        create_item(
+          board_id: $boardId,
+          item_name: $itemName,
+          column_values: $columnValues
+        ) {
+          id
+        }
+      }
+    `;
+    const data = await this.makeRequest(query, variables);
+    return data.create_item;
+  }
+
+  async syncData(data) {
+    try {
+      console.log('Starting MSM Monday.com integration...');
+      
+      // Handle both file path and direct data
+      let records;
+      if (typeof data === 'string') {
+        // Load from file
+        const jsonData = await fs.readFile(data, 'utf8');
+        records = JSON.parse(jsonData);
+      } else if (Array.isArray(data)) {
+        // Use data directly
+        records = data;
+      } else {
+        throw new Error('Data must be either a file path (string) or an array of records');
+      }
+      
+      if (!records.length) {
+        console.log('No MSM records to sync');
+        return;
+      }
+
+      console.log(`Loaded ${records.length} MSM records`);
+
+      // Find or create board
+      let board;
+      
+      if (BOARD_ID) {
+        console.log(`Using specified MSM board ID: ${BOARD_ID}`);
+        board = { id: BOARD_ID, name: BOARD_NAME };
+      } else {
+        board = await this.findBoardByName(BOARD_NAME);
+        
+        if (!board) {
+          console.log('MSM board not found. Please create it manually using msm_board_import.xlsx');
+          console.log('1. Upload msm_board_import.xlsx to Monday.com');
+          console.log('2. Name the board "MSM Shift Data" (exact name required)');
+          console.log('3. Add the board ID to your .env file as MONDAY_MSM_BOARD_ID');
+          process.exit(1);
+        } else {
+          console.log(`Found existing MSM board: ${board.name} (ID: ${board.id})`);
+        }
+      }
+
+      // Get board columns
+      const columns = await this.getBoardColumns(board.id);
+      console.log(`MSM board has ${columns.length} columns`);
+
+      // Clear all existing items and rebuild from scratch
+      await this.deleteAllItems(board.id);
+
+      // Process records and create new items
+      let newItemsCount = 0;
+      let failedCount = 0;
+
+      console.log(`Creating ${records.length} new MSM items...`);
+
+      for (let i = 0; i < records.length; i++) {
+        const record = records[i];
+        // Use just the date as item name for the first column
+        const itemName = record.Date;
+
+        try {
+          await this.createItem(board.id, record, columns, itemName);
+          newItemsCount++;
+          console.log(`Created MSM item: ${itemName}`);
+          
+          // Add a small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (error) {
+          failedCount++;
+          console.error(`Failed to create MSM item ${itemName}:`, error.message);
+        }
+      }
+
+      console.log(`\nMSM Sync completed:`);
+      console.log(`- New items created: ${newItemsCount}`);
+      console.log(`- Items failed: ${failedCount}`);
+      console.log(`- Total processed: ${records.length}`);
+
+    } catch (error) {
+      console.error('MSM Monday.com integration failed:', error.message);
+      throw error;
+    }
+  }
+}
+
+// Main execution
+async function main() {
+  try {
+    console.log('Running MSM Monday.com integration...');
+    
+    // Look for MSM data file
+    const dataFile = path.join(__dirname, 'msm_results.json');
+    console.log(`Looking for MSM data file: ${dataFile}`);
+    
+    const integration = new MSMMondayIntegration();
+    await integration.syncData(dataFile);
+    
+    console.log('MSM Monday.com integration completed successfully!');
+  } catch (error) {
+    console.error('Integration failed:', error.message);
+    console.error('Full error:', error);
+    process.exit(1);
+  }
+}
+
+// Check if this script is being run directly
+if (process.argv[1] && process.argv[1].includes('msm_monday_integration.mjs')) {
+  main();
+}
+
+export default MSMMondayIntegration;

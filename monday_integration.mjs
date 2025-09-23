@@ -277,6 +277,47 @@ class MondayIntegration {
     return allItems;
   }
 
+  async deleteAllItems(boardId) {
+    console.log('Clearing existing data from board...');
+    
+    // Get all items first
+    const items = await this.getBoardItems(boardId);
+    if (items.length === 0) {
+      console.log('No items to delete');
+      return;
+    }
+    
+    console.log(`Deleting ${items.length} existing items...`);
+    
+    // Delete items one by one (Monday.com API only supports delete_item singular)
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      
+      const query = `
+        mutation DeleteItem($itemId: ID!) {
+          delete_item(item_id: $itemId) {
+            id
+          }
+        }
+      `;
+      
+      const variables = { itemId: item.id };
+      
+      try {
+        await this.makeRequest(query, variables);
+        console.log(`Deleted item ${i + 1}/${items.length}: ${item.name}`);
+        
+        // Add small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        console.error(`Failed to delete item ${item.name}:`, error.message);
+        // Continue with other items even if one fails
+      }
+    }
+    
+    console.log('✅ Board cleared successfully');
+  }
+
   async createItem(boardId, itemData, columns, itemName) {
     // Use the provided item name (date with index for uniqueness)
     const safeItemName = itemName.replace(/"/g, '\\"');
@@ -392,47 +433,19 @@ class MondayIntegration {
       const columns = await this.getBoardColumns(board.id);
       console.log(`Board has ${columns.length} columns`);
 
-      // Get existing items to avoid duplicates
-      const existingItems = await this.getBoardItems(board.id);
-      console.log(`Found ${existingItems.length} existing items`);
-
-      // Get column IDs from the board
-      const columnIds = {};
-      for (const column of columns) {
-        columnIds[column.title] = column.id;
-      }
-      console.log('Column IDs:', columnIds);
+      // Clear all existing items and rebuild from scratch
+      await this.deleteAllItems(board.id);
 
       // Process records and create new items
       let newItemsCount = 0;
-      let skippedCount = 0;
+      let failedCount = 0;
+
+      console.log(`Creating ${records.length} new items...`);
 
       for (let i = 0; i < records.length; i++) {
         const record = records[i];
         // Use just the date as item name for the first column
         const itemName = record.date;
-        
-        // Check if this specific combination already exists by looking at column values
-        // Since there's no date column, check by client and employee only
-        const existingItem = existingItems.find(item => {
-          const clientCol = item.column_values.find(col => col.id === columnIds.client);
-          const employeeCol = item.column_values.find(col => col.id === columnIds.employee);
-          
-          const isMatch = clientCol && employeeCol &&
-                 clientCol.text === record.client &&
-                 employeeCol.text === record.employee;
-          
-          if (isMatch) {
-            console.log(`Found duplicate: ${record.client} - ${record.employee} - ${record.date}`);
-          }
-          
-          return isMatch;
-        });
-        
-        if (existingItem) {
-          skippedCount++;
-          continue;
-        }
 
         try {
           await this.createItem(board.id, record, columns, itemName);
@@ -442,13 +455,14 @@ class MondayIntegration {
           // Add a small delay to avoid rate limiting
           await new Promise(resolve => setTimeout(resolve, 100));
         } catch (error) {
+          failedCount++;
           console.error(`Failed to create item ${itemName}:`, error.message);
         }
       }
 
       console.log(`\nSync completed:`);
       console.log(`- New items created: ${newItemsCount}`);
-      console.log(`- Items skipped (already exist): ${skippedCount}`);
+      console.log(`- Items failed: ${failedCount}`);
       console.log(`- Total processed: ${records.length}`);
 
     } catch (error) {

@@ -7,6 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { chromium } from 'playwright';
 import dotenv from 'dotenv';
+import MSMMondayIntegration from './msm_monday_integration.mjs';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -120,7 +121,7 @@ async function login(page, user, pass) {
 
 async function run() {
   const browser = await chromium.launch({ 
-    headless: false, 
+    headless: true, 
     args: ['--no-sandbox', '--disable-dev-shm-usage'] 
   });
   let context;
@@ -456,6 +457,18 @@ async function run() {
   console.log(`Done. Saved:
 - ${OUTPUT_JSON}
 - ${OUTPUT_CSV}`);
+
+  // Send data directly to Monday.com
+  console.log('\n=== Sending MSM data to Monday.com ===');
+  try {
+    const msmIntegration = new MSMMondayIntegration();
+    await msmIntegration.syncData(allRows); // Pass data directly
+    console.log('✅ Successfully synced MSM data to Monday.com');
+  } catch (error) {
+    console.error('❌ MSM Monday.com sync failed:', error.message);
+    console.log('\nFalling back to local file output...');
+    console.log(`MSM data saved to ${OUTPUT_JSON} and ${OUTPUT_CSV} as backup`);
+  }
 
   await browser.close();
 }

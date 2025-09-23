@@ -132,6 +132,8 @@ Outputs:
 
 ### Prerequisites for Monday.com Integration
 
+#### For Schedule Scraper (ABS Shift Data)
+
 1. **Set up Monday.com API token in `.env`:**
 ```env
 MONDAY_API_TOKEN=your_monday_api_token
@@ -146,27 +148,57 @@ MONDAY_BOARD_ID=your_board_id
    - After import, copy the Board ID from the URL and add it to your `.env` file
    - **Note:** The Excel file contains sample data - you can delete the sample rows after import
 
+#### For MSM Scraper (MSM Shift Data)
+
+1. **Set up Monday.com API token in `.env` (same as above):**
+```env
+MONDAY_API_TOKEN=your_monday_api_token
+MONDAY_MSM_BOARD_ID=your_msm_board_id
+```
+
+2. **Create the MSM Monday.com board manually:**
+   - In Monday.com, go to your workspace
+   - Click the "+" button → "Import from Excel"
+   - Upload the `msm_board_import.xlsx` file (included with sample data)
+   - Name the board "MSM Shift Data" (exact name required)
+   - After import, copy the Board ID from the URL and add it to your `.env` file as `MONDAY_MSM_BOARD_ID`
+   - **Note:** The Excel file contains sample data - you can delete the sample rows after import
+
 ### Run Commands
 
-**Integrated scraper (recommended):**
+**Schedule Scraper with Monday.com (recommended):**
 ```bash
 npm run scrape-monday
 ```
 
-**Original scraper (local files only):**
+**MSM Scraper with Monday.com (recommended):**
 ```bash
-npm run scrape
+npm run scrape-msm-monday
+```
+
+**Original scrapers (local files only):**
+```bash
+npm run scrape          # Schedule scraper
+npm run scrape-msm      # MSM scraper
+```
+
+**Manual sync to Monday.com:**
+```bash
+npm run sync-monday     # Sync existing schedule data
+npm run sync-msm-monday # Sync existing MSM data
 ```
 
 **Manual run:**
 - Windows (PowerShell)
 ```powershell
 node .\schedule_scrape.mjs
+node .\mobile_shift_maintenance_scrape.mjs
 ```
 
 - macOS/Linux (bash/zsh)
 ```bash
 node ./schedule_scrape.mjs
+node ./mobile_shift_maintenance_scrape.mjs
 ```
 
 ---
