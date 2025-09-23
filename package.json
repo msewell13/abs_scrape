@@ -10,7 +10,11 @@
     "scrape-msm": "node mobile_shift_maintenance_scrape.mjs",
     "scrape-msm-monday": "node mobile_shift_maintenance_scrape.mjs",
     "sync-monday": "node monday_integration.mjs",
-    "sync-msm-monday": "node msm_monday_integration.mjs"
+    "sync-msm-monday": "node msm_monday_integration.mjs",
+    "cron-schedule": "node cron_scheduler.mjs --schedule-schedule",
+    "cron-msm": "node cron_scheduler.mjs --schedule-msm",
+    "cron-both": "node cron_scheduler.mjs --schedule-both",
+    "install-tasks": "powershell -ExecutionPolicy Bypass -File install_scheduled_tasks.ps1"
   },
   "keywords": [],
   "author": "",

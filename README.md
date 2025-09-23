@@ -203,6 +203,81 @@ node ./mobile_shift_maintenance_scrape.mjs
 
 ---
 
+## Automated Scheduling (Cron Jobs)
+
+The project includes automated scheduling capabilities for running scrapers at regular intervals.
+
+### Quick Start
+
+**Run scrapers with cron scheduler:**
+```bash
+npm run cron-schedule    # Run schedule scraper
+npm run cron-msm         # Run MSM scraper  
+npm run cron-both        # Run both scrapers
+```
+
+**Install Windows scheduled tasks:**
+```bash
+npm run install-tasks    # Install Windows Task Scheduler tasks
+```
+
+### Windows Task Scheduler Setup
+
+1. **Automatic Installation:**
+   ```bash
+   npm run install-tasks
+   ```
+   This creates three scheduled tasks:
+   - `ABS-Schedule-Scraper` (Weekdays at 8:00 AM)
+   - `ABS-MSM-Scraper` (Weekdays at 9:00 AM)  
+   - `ABS-Both-Scrapers` (Weekdays at 10:00 AM)
+
+2. **Manual Installation:**
+   - Open Task Scheduler (`taskschd.msc`)
+   - Create Basic Task → Name: "ABS-Schedule-Scraper"
+   - Trigger: Daily → Start time: 8:00 AM → Recur every: 1 day
+   - Action: Start a program → Program: `node` → Arguments: `"C:\path\to\cron_scheduler.mjs" --schedule-schedule`
+
+### Cron Scheduler Features
+
+- **Automatic Retries**: Failed runs are retried up to 3 times
+- **Logging**: All runs are logged to `logs/cron-YYYY-MM-DD.log`
+- **Timeout Protection**: Scripts timeout after 30 minutes
+- **Error Handling**: Comprehensive error reporting and recovery
+
+### Log Files
+
+- **Location**: `logs/cron-YYYY-MM-DD.log`
+- **Retention**: Last 30 days of logs kept automatically
+- **Format**: `[TIMESTAMP] [LEVEL] MESSAGE`
+
+### Manual Execution
+
+**Using batch files:**
+```bash
+run_schedule.bat    # Run schedule scraper
+run_msm.bat         # Run MSM scraper
+run_both.bat        # Run both scrapers
+```
+
+**Using PowerShell:**
+```powershell
+# Run with custom times
+.\install_scheduled_tasks.ps1 -ScheduleTime "07:00" -MSMTime "08:00"
+
+# Force overwrite existing tasks
+.\install_scheduled_tasks.ps1 -Force
+```
+
+### Troubleshooting Scheduling
+
+- **Task not running**: Check Windows Event Viewer for Task Scheduler errors
+- **Permission issues**: Run PowerShell as Administrator
+- **Node not found**: Ensure Node.js is in system PATH
+- **Log files**: Check `logs/` directory for detailed error information
+
+---
+
 ## Troubleshooting
 
 - Node is not recognized in Cursor terminal:
