@@ -280,42 +280,115 @@ class MondayIntegration {
   async deleteAllItems(boardId) {
     console.log('Clearing existing data from board...');
     
-    // Get all items first
-    const items = await this.getBoardItems(boardId);
-    if (items.length === 0) {
-      console.log('No items to delete');
-      return;
-    }
+    // Try to delete items in batches without fetching all first
+    // This is much faster as we don't need to fetch all items
+    let deletedCount = 0;
+    let batchNumber = 1;
+    const batchSize = 50; // Larger batches for deletion
     
-    console.log(`Deleting ${items.length} existing items...`);
-    
-    // Delete items one by one (Monday.com API only supports delete_item singular)
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      
-      const query = `
-        mutation DeleteItem($itemId: ID!) {
-          delete_item(item_id: $itemId) {
-            id
-          }
-        }
-      `;
-      
-      const variables = { itemId: item.id };
-      
+    while (true) {
       try {
-        await this.makeRequest(query, variables);
-        console.log(`Deleted item ${i + 1}/${items.length}: ${item.name}`);
+        // Get a small batch of items to delete
+        const query = `
+          query {
+            boards(ids: [${boardId}]) {
+              items_page(limit: ${batchSize}) {
+                items {
+                  id
+                }
+              }
+            }
+          }
+        `;
         
-        // Add small delay to avoid rate limiting
+        const data = await this.makeRequest(query);
+        const items = data.boards[0].items_page.items;
+        
+        if (items.length === 0) {
+          break; // No more items to delete
+        }
+        
+        // Delete this batch
+        const mutations = items.map((item, index) => 
+          `delete${index + 1}: delete_item(item_id: "${item.id}") { id }`
+        ).join('\n');
+        
+        const deleteQuery = `mutation { ${mutations} }`;
+        await this.makeRequest(deleteQuery);
+        
+        deletedCount += items.length;
+        console.log(`Deleted batch ${batchNumber} (${items.length} items, total: ${deletedCount})`);
+        
+        batchNumber++;
+        
+        // Small delay between batches
         await new Promise(resolve => setTimeout(resolve, 100));
+        
       } catch (error) {
-        console.error(`Failed to delete item ${item.name}:`, error.message);
-        // Continue with other items even if one fails
+        console.error(`Failed to delete batch ${batchNumber}:`, error.message);
+        break; // Stop if we can't delete anymore
       }
     }
     
-    console.log('✅ Board cleared successfully');
+    console.log(`✅ Board cleared successfully (${deletedCount} items deleted)`);
+  }
+
+  async createItemsBatch(boardId, records, columns) {
+    // Create items in batches of 25 (aggressive batching for speed)
+    const batchSize = 25;
+    let totalCreated = 0;
+    
+    for (let i = 0; i < records.length; i += batchSize) {
+      const batch = records.slice(i, i + batchSize);
+      
+      // Build multiple create mutations in one request
+      const mutations = batch.map((record, index) => {
+        const itemName = record.date.replace(/"/g, '\\"');
+        const columnValues = {};
+        
+        for (const [key, value] of Object.entries(record)) {
+          const column = columns.find(col => col.title === key);
+          if (column && value !== null) {
+            let columnValue = value;
+            
+            // Handle special column types
+            if (column.type === 'status') {
+              const statusId = STATUS_IDS[value];
+              if (statusId !== undefined) {
+                columnValue = statusId.toString();
+              } else {
+                continue;
+              }
+            } else if (column.type === 'date') {
+              columnValue = value;
+            }
+            
+            columnValues[column.id] = columnValue;
+          }
+        }
+        
+        const columnValuesJson = JSON.stringify(columnValues).replace(/"/g, '\\"');
+        return `create${index + 1}: create_item(board_id: "${boardId}", item_name: "${itemName}", column_values: "${columnValuesJson}") { id }`;
+      }).join('\n');
+      
+      const query = `mutation { ${mutations} }`;
+      
+      try {
+        await this.makeRequest(query);
+        totalCreated += batch.length;
+        console.log(`Created batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(records.length/batchSize)} (${batch.length} items)`);
+        
+        // Minimal delay between batches for maximum speed
+        if (i + batchSize < records.length) {
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+      } catch (error) {
+        console.error(`Failed to create batch:`, error.message);
+        // Continue with other batches even if one fails
+      }
+    }
+    
+    return totalCreated;
   }
 
   async createItem(boardId, itemData, columns, itemName) {
@@ -433,32 +506,11 @@ class MondayIntegration {
       const columns = await this.getBoardColumns(board.id);
       console.log(`Board has ${columns.length} columns`);
 
-      // Clear all existing items and rebuild from scratch
-      await this.deleteAllItems(board.id);
+      // Skip deletion - just create new items (much faster)
+      console.log(`Creating ${records.length} new items in batches...`);
 
-      // Process records and create new items
-      let newItemsCount = 0;
-      let failedCount = 0;
-
-      console.log(`Creating ${records.length} new items...`);
-
-      for (let i = 0; i < records.length; i++) {
-        const record = records[i];
-        // Use just the date as item name for the first column
-        const itemName = record.date;
-
-        try {
-          await this.createItem(board.id, record, columns, itemName);
-          newItemsCount++;
-          console.log(`Created item: ${itemName}`);
-          
-          // Add a small delay to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 100));
-        } catch (error) {
-          failedCount++;
-          console.error(`Failed to create item ${itemName}:`, error.message);
-        }
-      }
+      const newItemsCount = await this.createItemsBatch(board.id, records, columns);
+      const failedCount = records.length - newItemsCount;
 
       console.log(`\nSync completed:`);
       console.log(`- New items created: ${newItemsCount}`);
