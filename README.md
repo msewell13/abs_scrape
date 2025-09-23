@@ -2,9 +2,17 @@
 
 This repo contains two Playwright-based scrapers for the ABS portal:
 - `mobile_shift_maintenance_scrape.mjs`: scrapes the Mobile Shift Maintenance grid
-- `scrape_with_login.mjs`: scrapes Month Block view from Schedule Master
+- `scrape_with_login.mjs`: scrapes Month Block view from Schedule Master and sends data directly to Monday.com
 
 Both load credentials from a `.env` file and save a reusable Playwright `storageState.json` after login.
+
+### Monday.com Integration
+
+The `scrape_with_login.mjs` scraper now includes integrated Monday.com sync:
+- Scrapes shift data from the ABS portal
+- Sends data directly to Monday.com (no intermediate files)
+- Falls back to local JSON/CSV files if Monday.com sync fails
+- Includes duplicate detection to prevent creating duplicate records
 
 ---
 
@@ -98,20 +106,43 @@ node ./mobile_shift_maintenance_scrape.mjs
 
 ---
 
-## Script 2: Schedule Month Block scraper
+## Script 2: Schedule Month Block scraper (with Monday.com integration)
 
 File: `scrape_with_login.mjs`
 
 What it does:
-- Logs in (using `.env`), goes to Schedule Master, switches to Month tab → Month Block view, scrapes all visible cards with date inference.
+- Logs in (using `.env`), goes to Schedule Master, switches to Month tab → Month Block view, scrapes all visible cards with date inference
+- **NEW**: Sends data directly to Monday.com (no intermediate files)
+- Falls back to local files if Monday.com sync fails
 
 Outputs:
-- `month_block.json`
-- `month_block.csv`
+- Data sent directly to Monday.com board
+- `month_block.json` and `month_block.csv` (only if Monday.com sync fails)
 - `storageState.json`
 
-Run:
+### Prerequisites for Monday.com Integration
 
+1. Set up Monday.com API token in `.env`:
+```env
+MONDAY_API_TOKEN=your_monday_api_token
+MONDAY_BOARD_ID=your_board_id  # Optional: specify existing board
+```
+
+2. Create the Monday.com board (see `MONDAY_IMPORT_GUIDE.md` for details)
+
+### Run Commands
+
+**Integrated scraper (recommended):**
+```bash
+npm run scrape-monday
+```
+
+**Original scraper (local files only):**
+```bash
+npm run scrape
+```
+
+**Manual run:**
 - Windows (PowerShell)
 ```powershell
 node .\scrape_with_login.mjs
