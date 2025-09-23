@@ -143,7 +143,7 @@ MONDAY_BOARD_ID=your_board_id
 2. **Create the Monday.com board manually:**
    - In Monday.com, go to your workspace
    - Click the "+" button → "Import from Excel"
-   - Upload the `monday_board_import.xlsx` file (included with sample data)
+   - Upload the `schedule_board_import.xlsx` file (included with sample data)
    - Name the board "ABS Shift Data" (exact name required)
    - After import, copy the Board ID from the URL and add it to your `.env` file
    - **Note:** The Excel file contains sample data - you can delete the sample rows after import

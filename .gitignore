@@ -65,7 +65,7 @@ msm_results.csv
 msm_results.json
 
 # Excel files with sample data (keep templates but don't commit)
-monday_board_import.xlsx
+schedule_board_import.xlsx
 msm_board_import.xlsx
 
 # Note: Do NOT ignore project metadata JSON files
