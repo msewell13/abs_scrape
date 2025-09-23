@@ -156,23 +156,17 @@ class CronScheduler {
     
     const tasks = [
       {
-        name: 'ABS-Schedule-Scraper',
-        description: 'Run ABS Schedule Scraper with Monday.com sync',
-        command: `"${nodePath}" "${scriptPath}" --schedule-schedule`,
-        schedule: '0 8 * * 1-5' // 8 AM weekdays
-      },
-      {
-        name: 'ABS-MSM-Scraper',
-        description: 'Run ABS MSM Scraper with Monday.com sync',
-        command: `"${nodePath}" "${scriptPath}" --schedule-msm`,
-        schedule: '0 9 * * 1-5' // 9 AM weekdays
+        name: 'ABS-Both-Scrapers',
+        description: 'Run both ABS scrapers with Monday.com sync',
+        command: `"${nodePath}" "${scriptPath}" --schedule-both`,
+        schedule: '0 0 * * *' // Midnight daily
       }
     ];
 
     for (const task of tasks) {
       try {
         // Create the task
-        const createCommand = `schtasks /create /tn "${task.name}" /tr "${task.command}" /sc weekly /d MON,TUE,WED,THU,FRI /st 08:00 /f`;
+        const createCommand = `schtasks /create /tn "${task.name}" /tr "${task.command}" /sc daily /st 00:00 /f`;
         await execAsync(createCommand);
         this.log(`Created Windows task: ${task.name}`);
       } catch (error) {

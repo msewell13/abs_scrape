@@ -80,25 +80,17 @@ function Create-ScheduledTask {
 }
 
 # Create tasks
-Write-Host "Creating scheduled tasks..." -ForegroundColor Cyan
+Write-Host "Creating scheduled task..." -ForegroundColor Cyan
 Write-Host ""
 
-# Schedule Scraper Task
-Create-ScheduledTask -TaskName "ABS-Schedule-Scraper" -Description "Run ABS Schedule Scraper with Monday.com sync" -Command $nodePath -Arguments "`"$cronScript`" --schedule-schedule" -ScheduleTime $ScheduleTime
-
-# MSM Scraper Task  
-Create-ScheduledTask -TaskName "ABS-MSM-Scraper" -Description "Run ABS MSM Scraper with Monday.com sync" -Command $nodePath -Arguments "`"$cronScript`" --schedule-msm" -ScheduleTime $MSMTime
-
-# Both Scrapers Task (optional)
-Create-ScheduledTask -TaskName "ABS-Both-Scrapers" -Description "Run both ABS scrapers with Monday.com sync" -Command $nodePath -Arguments "`"$cronScript`" --schedule-both" -ScheduleTime "10:00"
+# Both Scrapers Task - Daily at midnight
+Create-ScheduledTask -TaskName "ABS-Both-Scrapers" -Description "Run both ABS scrapers with Monday.com sync" -Command $nodePath -Arguments "`"$cronScript`" --schedule-both" -ScheduleTime "00:00"
 
 Write-Host ""
 Write-Host "Scheduled Task Installation Complete!" -ForegroundColor Green
 Write-Host ""
-Write-Host "Created tasks:" -ForegroundColor Cyan
-Write-Host "- ABS-Schedule-Scraper (Schedule: Weekdays at $ScheduleTime)" -ForegroundColor White
-Write-Host "- ABS-MSM-Scraper (Schedule: Weekdays at $MSMTime)" -ForegroundColor White  
-Write-Host "- ABS-Both-Scrapers (Schedule: Weekdays at 10:00)" -ForegroundColor White
+Write-Host "Created task:" -ForegroundColor Cyan
+Write-Host "- ABS-Both-Scrapers (Schedule: Daily at 00:00)" -ForegroundColor White
 Write-Host ""
 Write-Host "To manage tasks:" -ForegroundColor Cyan
 Write-Host "- Open Task Scheduler (taskschd.msc)" -ForegroundColor White

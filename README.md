@@ -2,17 +2,18 @@
 
 This repo contains two Playwright-based scrapers for the ABS portal:
 - `mobile_shift_maintenance_scrape.mjs`: scrapes the Mobile Shift Maintenance grid
-- `schedule_scrape.mjs`: scrapes Month Block view from Schedule Master and sends data directly to Monday.com
+- `schedule_scrape.mjs`: scrapes Month Block view from Schedule Master
+- Both scrapers send data directly to Monday.com
 
 Both load credentials from a `.env` file and save a reusable Playwright `storageState.json` after login.
 
 ### Monday.com Integration
 
-The `schedule_scrape.mjs` scraper now includes integrated Monday.com sync:
-- Scrapes shift data from the ABS portal
+The scrapers now includes integrated Monday.com sync:
+- Scrapes data from the ABS portal
 - Sends data directly to Monday.com (no intermediate files)
 - Falls back to local JSON/CSV files if Monday.com sync fails
-- Includes duplicate detection to prevent creating duplicate records
+
 
 ---
 
@@ -68,24 +69,13 @@ ABS_PASS=your_password
 ```env
 MONDAY_API_TOKEN=your_monday_api_token
 MONDAY_SCHEDULE_BOARD_ID=your_schedule_board_id
-MONDAY_MSM_BOARD_ID=board_id
+MONDAY_MSM_BOARD_ID=your_msm_board_id
 ```
 
-Alternative: set env vars in the shell for one session
-
-- Windows (PowerShell):
-```powershell
-$env:ABS_USER="your_username"; $env:ABS_PASS="your_password"; $env:MONDAY_API_TOKEN="your_token"; $env:MONDAY_SCHEDULE_BOARD_ID="your_schedule_board_id"
-```
-
-- macOS/Linux (bash/zsh):
-```bash
-export ABS_USER="your_username" ABS_PASS="your_password" MONDAY_API_TOKEN="your_token" MONDAY_SCHEDULE_BOARD_ID="your_schedule_board_id"
-```
+---
 
 Notes:
 - Keep `.env` private (do not commit it).
-- Shell env vars override `.env` for that session.
 - Get your Monday.com API token from: Account Settings → API → Generate new token
 - Board ID can be found in the Monday.com board URL
 
@@ -99,9 +89,9 @@ What it does:
 - Logs in (using `.env`), navigates to Mobile Shift Maintenance, selects the full current month and selects all exceptions, paginates the Kendo grid, and saves results.
 
 Outputs:
-- `msm_results.json`
-- `msm_results.csv`
-- `storageState.json` (session reused on next runs)
+- Data sent directly to Monday.com board
+- `month_block.json` and `month_block.csv` (only if Monday.com sync fails)
+- `storageState.json`
 
 Run:
 
@@ -135,13 +125,7 @@ Outputs:
 
 #### For Schedule Scraper (ABS Shift Data)
 
-1. **Set up Monday.com API token in `.env`:**
-```env
-MONDAY_API_TOKEN=your_monday_api_token
-MONDAY_SCHEDULE_BOARD_ID=your_schedule_board_id
-```
-
-2. **Create the Monday.com board manually:**
+1. **Create the Monday.com board manually:**
    - In Monday.com, go to your workspace
    - Click the "+" button → "Import from Excel"
    - Upload the `schedule_board_import.xlsx` file (included with sample data)
@@ -151,13 +135,7 @@ MONDAY_SCHEDULE_BOARD_ID=your_schedule_board_id
 
 #### For MSM Scraper (MSM Shift Data)
 
-1. **Set up Monday.com API token in `.env` (same as above):**
-```env
-MONDAY_API_TOKEN=your_monday_api_token
-MONDAY_MSM_BOARD_ID=your_msm_board_id
-```
-
-2. **Create the MSM Monday.com board manually:**
+1. **Create the MSM Monday.com board manually:**
    - In Monday.com, go to your workspace
    - Click the "+" button → "Import from Excel"
    - Upload the `msm_board_import.xlsx` file (included with sample data)
@@ -212,14 +190,14 @@ The project includes automated scheduling capabilities for running scrapers at r
 
 **Run scrapers with cron scheduler:**
 ```bash
-npm run cron-schedule    # Run schedule scraper
-npm run cron-msm         # Run MSM scraper  
-npm run cron-both        # Run both scrapers
+npm run cron-both        # Run both scrapers (recommended)
+npm run cron-schedule    # Run schedule scraper only
+npm run cron-msm         # Run MSM scraper only
 ```
 
 **Install Windows scheduled tasks:**
 ```bash
-npm run install-tasks    # Install Windows Task Scheduler tasks
+npm run install-tasks    # Install Windows Task Scheduler task
 ```
 
 ### Windows Task Scheduler Setup
@@ -228,16 +206,14 @@ npm run install-tasks    # Install Windows Task Scheduler tasks
    ```bash
    npm run install-tasks
    ```
-   This creates three scheduled tasks:
-   - `ABS-Schedule-Scraper` (Weekdays at 8:00 AM)
-   - `ABS-MSM-Scraper` (Weekdays at 9:00 AM)  
-   - `ABS-Both-Scrapers` (Weekdays at 10:00 AM)
+   This creates one scheduled task:
+   - `ABS-Both-Scrapers` (Daily at midnight)
 
 2. **Manual Installation:**
    - Open Task Scheduler (`taskschd.msc`)
-   - Create Basic Task → Name: "ABS-Schedule-Scraper"
-   - Trigger: Daily → Start time: 8:00 AM → Recur every: 1 day
-   - Action: Start a program → Program: `node` → Arguments: `"C:\path\to\cron_scheduler.mjs" --schedule-schedule`
+   - Create Basic Task → Name: "ABS-Both-Scrapers"
+   - Trigger: Daily → Start time: 12:00 AM → Recur every: 1 day
+   - Action: Start a program → Program: `node` → Arguments: `"C:\path\to\cron_scheduler.mjs" --schedule-both`
 
 ### macOS/Linux Cron Setup
 
@@ -245,10 +221,8 @@ npm run install-tasks    # Install Windows Task Scheduler tasks
    ```bash
    npm run install-cron-mac
    ```
-   This creates three cron jobs:
-   - Schedule Scraper (Weekdays at 8:00 AM)
-   - MSM Scraper (Weekdays at 9:00 AM)
-   - Both Scrapers (Weekdays at 10:00 AM)
+   This creates one cron job:
+   - Both Scrapers (Daily at midnight)
 
 2. **Manual Installation:**
    ```bash

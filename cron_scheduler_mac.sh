@@ -193,18 +193,12 @@ install_cron() {
     
     # Create cron entries
     local cron_entries=(
-        "# ABS Schedule Scraper - Weekdays at 8:00 AM"
-        "0 8 * * 1-5 cd $SCRIPT_DIR && $cron_script schedule >> $LOG_DIR/cron-schedule.log 2>&1"
-        ""
-        "# ABS MSM Scraper - Weekdays at 9:00 AM"
-        "0 9 * * 1-5 cd $SCRIPT_DIR && $cron_script msm >> $LOG_DIR/cron-msm.log 2>&1"
-        ""
-        "# ABS Both Scrapers - Weekdays at 10:00 AM"
-        "0 10 * * 1-5 cd $SCRIPT_DIR && $cron_script both >> $LOG_DIR/cron-both.log 2>&1"
+        "# ABS Both Scrapers - Daily at midnight"
+        "0 0 * * * cd $SCRIPT_DIR && $cron_script both >> $LOG_DIR/cron-both.log 2>&1"
     )
     
     # Check if cron jobs already exist
-    if crontab -l 2>/dev/null | grep -q "ABS Schedule Scraper"; then
+    if crontab -l 2>/dev/null | grep -q "ABS Both Scrapers"; then
         log "WARN" "Cron jobs already exist. Use 'crontab -e' to edit manually."
         return 1
     fi
@@ -216,13 +210,11 @@ install_cron() {
     } | crontab -
     
     if [ $? -eq 0 ]; then
-        log "INFO" "✅ Cron jobs installed successfully"
-        log "INFO" "Schedule: Weekdays at 8:00 AM"
-        log "INFO" "MSM: Weekdays at 9:00 AM"
-        log "INFO" "Both: Weekdays at 10:00 AM"
+        log "INFO" "✅ Cron job installed successfully"
+        log "INFO" "Both Scrapers: Daily at midnight (00:00)"
         log "INFO" "Logs: $LOG_DIR/"
     else
-        log "ERROR" "❌ Failed to install cron jobs"
+        log "ERROR" "❌ Failed to install cron job"
         return 1
     fi
 }
