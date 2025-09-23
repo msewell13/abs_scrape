@@ -14,7 +14,11 @@
     "cron-schedule": "node cron_scheduler.mjs --schedule-schedule",
     "cron-msm": "node cron_scheduler.mjs --schedule-msm",
     "cron-both": "node cron_scheduler.mjs --schedule-both",
-    "install-tasks": "powershell -ExecutionPolicy Bypass -File install_scheduled_tasks.ps1"
+    "install-tasks": "powershell -ExecutionPolicy Bypass -File install_scheduled_tasks.ps1",
+    "cron-schedule-mac": "./cron_scheduler_mac.sh schedule",
+    "cron-msm-mac": "./cron_scheduler_mac.sh msm",
+    "cron-both-mac": "./cron_scheduler_mac.sh both",
+    "install-cron-mac": "./cron_scheduler_mac.sh install"
   },
   "keywords": [],
   "author": "",

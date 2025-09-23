@@ -238,6 +238,42 @@ npm run install-tasks    # Install Windows Task Scheduler tasks
    - Trigger: Daily → Start time: 8:00 AM → Recur every: 1 day
    - Action: Start a program → Program: `node` → Arguments: `"C:\path\to\cron_scheduler.mjs" --schedule-schedule`
 
+### macOS/Linux Cron Setup
+
+1. **Automatic Installation:**
+   ```bash
+   npm run install-cron-mac
+   ```
+   This creates three cron jobs:
+   - Schedule Scraper (Weekdays at 8:00 AM)
+   - MSM Scraper (Weekdays at 9:00 AM)
+   - Both Scrapers (Weekdays at 10:00 AM)
+
+2. **Manual Installation:**
+   ```bash
+   # Make script executable
+   chmod +x cron_scheduler_mac.sh
+   
+   # Install cron jobs
+   ./cron_scheduler_mac.sh install
+   
+   # View installed cron jobs
+   crontab -l
+   ```
+
+3. **Manual Execution:**
+   ```bash
+   # Run scrapers manually
+   ./cron_scheduler_mac.sh schedule    # Schedule scraper
+   ./cron_scheduler_mac.sh msm         # MSM scraper
+   ./cron_scheduler_mac.sh both        # Both scrapers
+   
+   # Or using npm scripts
+   npm run cron-schedule-mac
+   npm run cron-msm-mac
+   npm run cron-both-mac
+   ```
+
 ### Cron Scheduler Features
 
 - **Automatic Retries**: Failed runs are retried up to 3 times
@@ -271,10 +307,20 @@ run_both.bat        # Run both scrapers
 
 ### Troubleshooting Scheduling
 
+**Windows:**
 - **Task not running**: Check Windows Event Viewer for Task Scheduler errors
 - **Permission issues**: Run PowerShell as Administrator
 - **Node not found**: Ensure Node.js is in system PATH
+
+**macOS/Linux:**
+- **Cron not running**: Check system cron service is enabled
+- **Permission issues**: Ensure script is executable (`chmod +x cron_scheduler_mac.sh`)
+- **Node not found**: Ensure Node.js is in system PATH
+- **Cron logs**: Check system cron logs (`/var/log/cron` or `journalctl -u cron`)
+
+**Both Platforms:**
 - **Log files**: Check `logs/` directory for detailed error information
+- **Environment variables**: Ensure `.env` file is properly configured
 
 ---
 
