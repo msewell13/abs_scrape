@@ -331,13 +331,22 @@ class MondayIntegration {
     return data.create_item;
   }
 
-  async syncData(jsonFilePath) {
+  async syncData(data) {
     try {
       console.log('Starting Monday.com integration...');
       
-      // Load the JSON data
-      const jsonData = await fs.readFile(jsonFilePath, 'utf8');
-      const records = JSON.parse(jsonData);
+      // Handle both file path and direct data
+      let records;
+      if (typeof data === 'string') {
+        // Load from file
+        const jsonData = await fs.readFile(data, 'utf8');
+        records = JSON.parse(jsonData);
+      } else if (Array.isArray(data)) {
+        // Use data directly
+        records = data;
+      } else {
+        throw new Error('Data must be either a file path (string) or an array of records');
+      }
       
       if (!records.length) {
         console.log('No records to sync');

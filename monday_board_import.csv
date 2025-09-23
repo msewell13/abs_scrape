@@ -1,6 +1,0 @@
-date,time,start_time,end_time,client,employee,location,product,bill_rate,pay_rate,status
-2025-09-01,6:40 AM - 9:40 AM,6:40 AM,9:40 AM,"Smith, Tony","Nolen, Carlos",TN - Memphis,CHOICES Personal Care (T1019),$26.36,$13.00,Completed
-2025-09-01,7:00 AM - 7:00 PM,7:00 AM,7:00 PM,"Smith, Bryce","Johnson, Sarah",TN - Nashville,Home Health Aide (HHA),$28.50,$15.00,Assigned
-2025-09-02,8:00 AM - 12:00 PM,8:00 AM,12:00 PM,"Davis, Mary",,TN - Knoxville,Personal Care Services,$25.00,$12.50,Open
-2025-09-02,2:00 PM - 6:00 PM,2:00 PM,6:00 PM,"Wilson, John","Brown, Michael",TN - Chattanooga,Companion Care,$22.00,$11.00,Completed
-2025-09-03,9:00 AM - 5:00 PM,9:00 AM,5:00 PM,"Taylor, Lisa","Garcia, Maria",TN - Memphis,Skilled Nursing,$35.00,$18.00,Assigned
