@@ -33,11 +33,11 @@ const COLUMN_MAPPINGS = {
   status: 'status'
 };
 
-// Status color mapping for Monday.com
-const STATUS_COLORS = {
-  'Open': 'red',
-  'Assigned': 'green',
-  'Completed': 'blue'
+// Status ID mapping for Monday.com (based on the error message)
+const STATUS_IDS = {
+  'Open': 2,
+  'Assigned': 0,
+  'Completed': 1
 };
 
 class MondayIntegration {
@@ -290,8 +290,14 @@ class MondayIntegration {
         
         // Handle special column types
         if (column.type === 'status') {
-          const color = STATUS_COLORS[value] || 'gray';
-          columnValue = JSON.stringify({ label: { text: value, color: color } });
+          // Use the predefined status ID instead of creating custom labels
+          const statusId = STATUS_IDS[value];
+          if (statusId !== undefined) {
+            columnValue = JSON.stringify({ label: statusId });
+          } else {
+            // Skip this field if status is not recognized
+            continue;
+          }
         } else if (column.type === 'date') {
           // Convert date to Monday.com format (YYYY-MM-DD)
           columnValue = value;
