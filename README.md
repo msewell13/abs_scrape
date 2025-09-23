@@ -67,19 +67,20 @@ ABS_PASS=your_password
 ### Monday.com Integration (for schedule scraper)
 ```env
 MONDAY_API_TOKEN=your_monday_api_token
-MONDAY_BOARD_ID=your_board_id
+MONDAY_SCHEDULE_BOARD_ID=your_schedule_board_id
+MONDAY_MSM_BOARD_ID=board_id
 ```
 
 Alternative: set env vars in the shell for one session
 
 - Windows (PowerShell):
 ```powershell
-$env:ABS_USER="your_username"; $env:ABS_PASS="your_password"; $env:MONDAY_API_TOKEN="your_token"; $env:MONDAY_BOARD_ID="your_board_id"
+$env:ABS_USER="your_username"; $env:ABS_PASS="your_password"; $env:MONDAY_API_TOKEN="your_token"; $env:MONDAY_SCHEDULE_BOARD_ID="your_schedule_board_id"
 ```
 
 - macOS/Linux (bash/zsh):
 ```bash
-export ABS_USER="your_username" ABS_PASS="your_password" MONDAY_API_TOKEN="your_token" MONDAY_BOARD_ID="your_board_id"
+export ABS_USER="your_username" ABS_PASS="your_password" MONDAY_API_TOKEN="your_token" MONDAY_SCHEDULE_BOARD_ID="your_schedule_board_id"
 ```
 
 Notes:
@@ -137,7 +138,7 @@ Outputs:
 1. **Set up Monday.com API token in `.env`:**
 ```env
 MONDAY_API_TOKEN=your_monday_api_token
-MONDAY_BOARD_ID=your_board_id
+MONDAY_SCHEDULE_BOARD_ID=your_schedule_board_id
 ```
 
 2. **Create the Monday.com board manually:**
@@ -357,7 +358,7 @@ run_both.bat        # Run both scrapers
   - Verify `.env` values and that the login page still uses `#UserName` / `#Password` fields.
 - **Monday.com board creation issues:**
   - If board import fails: Ensure the board is named exactly "ABS Shift Data"
-  - If sync fails: Check that `MONDAY_BOARD_ID` is set correctly in `.env`
+  - If sync fails: Check that `MONDAY_SCHEDULE_BOARD_ID` is set correctly in `.env`
 - Partial/empty results (Mobile Shift Maintenance):
   - The script automatically selects all exceptions and paginates the grid.
   - Verify the date range is the month you expect.

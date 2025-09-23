@@ -16,7 +16,7 @@ const __dirname = path.dirname(__filename);
 const MONDAY_API_URL = 'https://api.monday.com/v2';
 const MONDAY_API_TOKEN = process.env.MONDAY_API_TOKEN;
 const BOARD_NAME = 'ABS Shift Data';
-const BOARD_ID = process.env.MONDAY_BOARD_ID; // Optional: specify existing board ID
+const BOARD_ID = process.env.MONDAY_SCHEDULE_BOARD_ID; // Optional: specify existing board ID
 
 // Column type mapping based on data analysis
 // Note: The first column will be the item name, so we put date first in the mapping
@@ -513,7 +513,7 @@ class MondayIntegration {
             console.error('Failed to create board:', error.message);
             console.log('\nThis might be due to API permissions. Please try:');
             console.log('1. Check that your API token has "Create boards" permission');
-            console.log('2. Or create the board manually and set MONDAY_BOARD_ID in .env');
+            console.log('2. Or create the board manually and set MONDAY_SCHEDULE_BOARD_ID in .env');
             process.exit(1);
           }
         } else {
