@@ -60,14 +60,14 @@ function Create-ScheduledTask {
         # Create the action
         $action = New-ScheduledTaskAction -Execute $Command -Argument $Arguments -WorkingDirectory $scriptDir
         
-        # Create the trigger (weekdays at specified time)
-        $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -At $ScheduleTime
+        # Create the trigger (daily at specified time)
+        $trigger = New-ScheduledTaskTrigger -Daily -At $ScheduleTime
         
         # Create the settings with wake-up capabilities
         $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RunOnlyIfNetworkAvailable -WakeToRun
         
         # Create the principal (run as current user)
-        $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType InteractiveToken
+        $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
         
         # Register the task
         Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description $Description
