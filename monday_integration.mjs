@@ -240,30 +240,45 @@ class MondayIntegration {
   }
 
   async getBoardItems(boardId) {
-    const query = `
-      query {
-        boards(ids: [${boardId}]) {
-          items_page(limit: 1000) {
-            items {
-              id
-              name
-              column_values {
+    const allItems = [];
+    let cursor = null;
+    const limit = 500; // Monday.com API limit
+    
+    do {
+      const query = `
+        query {
+          boards(ids: [${boardId}]) {
+            items_page(limit: ${limit}${cursor ? `, cursor: "${cursor}"` : ''}) {
+              items {
                 id
-                text
+                name
+                column_values {
+                  id
+                  text
+                }
               }
+              cursor
             }
           }
         }
-      }
-    `;
+      `;
+      
+      const data = await this.makeRequest(query);
+      const itemsPage = data.boards[0].items_page;
+      
+      allItems.push(...itemsPage.items);
+      cursor = itemsPage.cursor;
+      
+      console.log(`Fetched ${itemsPage.items.length} items (total: ${allItems.length})`);
+      
+    } while (cursor);
     
-    const data = await this.makeRequest(query);
-    return data.boards[0].items_page.items;
+    return allItems;
   }
 
   async createItem(boardId, itemData, columns) {
     // Create a unique name for the item (combination of key fields)
-    const itemName = `${itemData.client} - ${itemData.employee} - ${itemData.date}`;
+    const itemName = `${itemData.client} - ${itemData.employee} - ${itemData.date}`.replace(/"/g, '\\"');
     
     // Map data to column values
     const columnValues = {};
@@ -286,19 +301,26 @@ class MondayIntegration {
       }
     }
 
+    // Use variables to avoid GraphQL syntax issues
+    const variables = {
+      boardId: boardId,
+      itemName: itemName,
+      columnValues: JSON.stringify(columnValues)
+    };
+
     const query = `
-      mutation {
+      mutation CreateItem($boardId: ID!, $itemName: String!, $columnValues: JSON!) {
         create_item(
-          board_id: ${boardId},
-          item_name: "${itemName}",
-          column_values: "${JSON.stringify(columnValues).replace(/"/g, '\\"')}"
+          board_id: $boardId,
+          item_name: $itemName,
+          column_values: $columnValues
         ) {
           id
         }
       }
     `;
 
-    const data = await this.makeRequest(query);
+    const data = await this.makeRequest(query, variables);
     return data.create_item;
   }
 
