@@ -8,9 +8,7 @@
     "scrape": "node schedule_scrape.mjs",
     "scrape-monday": "node schedule_scrape.mjs",
     "scrape-msm": "node mobile_shift_maintenance_scrape.mjs",
-    "sync-monday": "node monday_integration.mjs",
-    "test-monday": "node test_monday_integration.mjs",
-    "fix-monday": "node fix_monday_permissions.mjs"
+    "sync-monday": "node monday_integration.mjs"
   },
   "keywords": [],
   "author": "",
