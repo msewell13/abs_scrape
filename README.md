@@ -2,13 +2,13 @@
 
 This repo contains two Playwright-based scrapers for the ABS portal:
 - `mobile_shift_maintenance_scrape.mjs`: scrapes the Mobile Shift Maintenance grid
-- `scrape_with_login.mjs`: scrapes Month Block view from Schedule Master and sends data directly to Monday.com
+- `schedule_scrape.mjs`: scrapes Month Block view from Schedule Master and sends data directly to Monday.com
 
 Both load credentials from a `.env` file and save a reusable Playwright `storageState.json` after login.
 
 ### Monday.com Integration
 
-The `scrape_with_login.mjs` scraper now includes integrated Monday.com sync:
+The `schedule_scrape.mjs` scraper now includes integrated Monday.com sync:
 - Scrapes shift data from the ABS portal
 - Sends data directly to Monday.com (no intermediate files)
 - Falls back to local JSON/CSV files if Monday.com sync fails
@@ -108,7 +108,7 @@ node ./mobile_shift_maintenance_scrape.mjs
 
 ## Script 2: Schedule Month Block scraper (with Monday.com integration)
 
-File: `scrape_with_login.mjs`
+File: `schedule_scrape.mjs`
 
 What it does:
 - Logs in (using `.env`), goes to Schedule Master, switches to Month tab → Month Block view, scrapes all visible cards with date inference
@@ -145,12 +145,12 @@ npm run scrape
 **Manual run:**
 - Windows (PowerShell)
 ```powershell
-node .\scrape_with_login.mjs
+node .\schedule_scrape.mjs
 ```
 
 - macOS/Linux (bash/zsh)
 ```bash
-node ./scrape_with_login.mjs
+node ./schedule_scrape.mjs
 ```
 
 ---
