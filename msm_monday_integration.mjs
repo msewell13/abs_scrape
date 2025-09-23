@@ -131,16 +131,16 @@ class MSMMondayIntegration {
   }
 
   async deleteAllItems(boardId) {
-    console.log('Clearing existing MSM data from board...');
+    console.log('Clearing remaining old MSM items...');
     
-    // Try to delete items in batches without fetching all first
+    // Fast deletion with aggressive batching
     let deletedCount = 0;
     let batchNumber = 1;
-    const batchSize = 50; // Larger batches for deletion
+    const batchSize = 50; // Large batches for deletion
     
     while (true) {
       try {
-        // Get a small batch of items to delete
+        // Get a batch of items to delete
         const query = `
           query {
             boards(ids: [${boardId}]) {
@@ -160,7 +160,7 @@ class MSMMondayIntegration {
           break; // No more items to delete
         }
         
-        // Delete this batch
+        // Delete this batch with multiple mutations
         const mutations = items.map((item, index) => 
           `delete${index + 1}: delete_item(item_id: "${item.id}") { id }`
         ).join('\n');
@@ -169,20 +169,24 @@ class MSMMondayIntegration {
         await this.makeRequest(deleteQuery);
         
         deletedCount += items.length;
-        console.log(`Deleted MSM batch ${batchNumber} (${items.length} items, total: ${deletedCount})`);
+        console.log(`Deleted MSM cleanup batch ${batchNumber} (${items.length} items, total: ${deletedCount})`);
         
         batchNumber++;
         
-        // Small delay between batches
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Minimal delay for cleanup
+        await new Promise(resolve => setTimeout(resolve, 10));
         
       } catch (error) {
-        console.error(`Failed to delete MSM batch ${batchNumber}:`, error.message);
+        console.error(`Failed to delete MSM cleanup batch ${batchNumber}:`, error.message);
         break; // Stop if we can't delete anymore
       }
     }
     
-    console.log(`✅ MSM board cleared successfully (${deletedCount} items deleted)`);
+    if (deletedCount > 0) {
+      console.log(`✅ MSM cleanup completed (${deletedCount} old items removed)`);
+    } else {
+      console.log('✅ No old MSM items to clean up');
+    }
   }
 
   async createItemsBatch(boardId, records, columns) {
@@ -328,11 +332,15 @@ class MSMMondayIntegration {
       const columns = await this.getBoardColumns(board.id);
       console.log(`MSM board has ${columns.length} columns`);
 
-      // Skip deletion - just create new items (much faster)
+      // Create new items first (fast)
       console.log(`Creating ${records.length} new MSM items in batches...`);
 
       const newItemsCount = await this.createItemsBatch(board.id, records, columns);
       const failedCount = records.length - newItemsCount;
+
+      // Then clean up any remaining old items
+      console.log('\nCleaning up old MSM items...');
+      await this.deleteAllItems(board.id);
 
       console.log(`\nMSM Sync completed:`);
       console.log(`- New items created: ${newItemsCount}`);

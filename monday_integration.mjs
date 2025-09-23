@@ -278,17 +278,16 @@ class MondayIntegration {
   }
 
   async deleteAllItems(boardId) {
-    console.log('Clearing existing data from board...');
+    console.log('Clearing remaining old items...');
     
-    // Try to delete items in batches without fetching all first
-    // This is much faster as we don't need to fetch all items
+    // Fast deletion with aggressive batching
     let deletedCount = 0;
     let batchNumber = 1;
-    const batchSize = 50; // Larger batches for deletion
+    const batchSize = 50; // Large batches for deletion
     
     while (true) {
       try {
-        // Get a small batch of items to delete
+        // Get a batch of items to delete
         const query = `
           query {
             boards(ids: [${boardId}]) {
@@ -308,7 +307,7 @@ class MondayIntegration {
           break; // No more items to delete
         }
         
-        // Delete this batch
+        // Delete this batch with multiple mutations
         const mutations = items.map((item, index) => 
           `delete${index + 1}: delete_item(item_id: "${item.id}") { id }`
         ).join('\n');
@@ -317,20 +316,24 @@ class MondayIntegration {
         await this.makeRequest(deleteQuery);
         
         deletedCount += items.length;
-        console.log(`Deleted batch ${batchNumber} (${items.length} items, total: ${deletedCount})`);
+        console.log(`Deleted cleanup batch ${batchNumber} (${items.length} items, total: ${deletedCount})`);
         
         batchNumber++;
         
-        // Small delay between batches
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Minimal delay for cleanup
+        await new Promise(resolve => setTimeout(resolve, 10));
         
       } catch (error) {
-        console.error(`Failed to delete batch ${batchNumber}:`, error.message);
+        console.error(`Failed to delete cleanup batch ${batchNumber}:`, error.message);
         break; // Stop if we can't delete anymore
       }
     }
     
-    console.log(`✅ Board cleared successfully (${deletedCount} items deleted)`);
+    if (deletedCount > 0) {
+      console.log(`✅ Cleanup completed (${deletedCount} old items removed)`);
+    } else {
+      console.log('✅ No old items to clean up');
+    }
   }
 
   async createItemsBatch(boardId, records, columns) {
@@ -506,11 +509,15 @@ class MondayIntegration {
       const columns = await this.getBoardColumns(board.id);
       console.log(`Board has ${columns.length} columns`);
 
-      // Skip deletion - just create new items (much faster)
+      // Create new items first (fast)
       console.log(`Creating ${records.length} new items in batches...`);
 
       const newItemsCount = await this.createItemsBatch(board.id, records, columns);
       const failedCount = records.length - newItemsCount;
+
+      // Then clean up any remaining old items
+      console.log('\nCleaning up old items...');
+      await this.deleteAllItems(board.id);
 
       console.log(`\nSync completed:`);
       console.log(`- New items created: ${newItemsCount}`);
