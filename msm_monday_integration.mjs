@@ -190,50 +190,66 @@ class MSMMondayIntegration {
   }
 
   async createItemsBatch(boardId, records, columns) {
-    // Create items in batches of 25 (aggressive batching for speed)
-    const batchSize = 25;
+    // Create items in batches of 20 (reduced for reliability)
+    const batchSize = 20;
     let totalCreated = 0;
     
     for (let i = 0; i < records.length; i += batchSize) {
       const batch = records.slice(i, i + batchSize);
       
-      // Build multiple create mutations in one request
-      const mutations = batch.map((record, index) => {
-        const itemName = record.Date.replace(/"/g, '\\"');
-        const columnValues = {};
-        
-        for (const [key, value] of Object.entries(record)) {
-          const column = columns.find(col => col.title === key);
-          if (column && value !== null) {
-            let columnValue = value;
-            
-            // Handle special column types
-            if (column.type === 'date') {
-              columnValue = value;
+      // Create items one by one in parallel for maximum speed
+      const promises = batch.map(async (record) => {
+        try {
+          const itemName = record.Date;
+          const columnValues = {};
+          
+          for (const [key, value] of Object.entries(record)) {
+            const column = columns.find(col => col.title === key);
+            if (column && value !== null) {
+              let columnValue = value;
+              
+              // Handle special column types
+              if (column.type === 'date') {
+                columnValue = value;
+              }
+              
+              columnValues[column.id] = columnValue;
             }
-            
-            columnValues[column.id] = columnValue;
           }
+          
+          const query = `
+            mutation CreateItem($boardId: ID!, $itemName: String!, $columnValues: JSON!) {
+              create_item(
+                board_id: $boardId,
+                item_name: $itemName,
+                column_values: $columnValues
+              ) {
+                id
+              }
+            }
+          `;
+          
+          const variables = {
+            boardId: boardId,
+            itemName: itemName,
+            columnValues: JSON.stringify(columnValues)
+          };
+          
+          await this.makeRequest(query, variables);
+          return true;
+        } catch (error) {
+          console.error(`Failed to create item:`, error.message);
+          return false;
         }
-        
-        const columnValuesJson = JSON.stringify(columnValues).replace(/"/g, '\\"');
-        return `create${index + 1}: create_item(board_id: "${boardId}", item_name: "${itemName}", column_values: "${columnValuesJson}") { id }`;
-      }).join('\n');
-      
-      const query = `mutation { ${mutations} }`;
+      });
       
       try {
-        await this.makeRequest(query);
-        totalCreated += batch.length;
-        console.log(`Created MSM batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(records.length/batchSize)} (${batch.length} items)`);
-        
-        // Minimal delay between batches for maximum speed
-        if (i + batchSize < records.length) {
-          await new Promise(resolve => setTimeout(resolve, 10));
-        }
+        const results = await Promise.all(promises);
+        const successCount = results.filter(r => r).length;
+        totalCreated += successCount;
+        console.log(`Created MSM batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(records.length/batchSize)} (${successCount}/${batch.length} items)`);
       } catch (error) {
         console.error(`Failed to create MSM batch:`, error.message);
-        // Continue with other batches even if one fails
       }
     }
     
@@ -332,15 +348,15 @@ class MSMMondayIntegration {
       const columns = await this.getBoardColumns(board.id);
       console.log(`MSM board has ${columns.length} columns`);
 
-      // Create new items first (fast)
-      console.log(`Creating ${records.length} new MSM items in batches...`);
+      // Clear all existing items first
+      console.log('Clearing existing MSM data...');
+      await this.deleteAllItems(board.id);
+
+      // Then create new items
+      console.log(`Creating ${records.length} new MSM items...`);
 
       const newItemsCount = await this.createItemsBatch(board.id, records, columns);
       const failedCount = records.length - newItemsCount;
-
-      // Then clean up any remaining old items
-      console.log('\nCleaning up old MSM items...');
-      await this.deleteAllItems(board.id);
 
       console.log(`\nMSM Sync completed:`);
       console.log(`- New items created: ${newItemsCount}`);
