@@ -64,11 +64,6 @@ month_block.json
 msm_results.csv
 msm_results.json
 
-# Excel files with real data (keep sample template)
-monday_board_import_real.xlsx
-monday_board_import_*.xlsx
-!monday_board_import.xlsx
-
 # Note: Do NOT ignore project metadata JSON files
 !package.json
 !package-lock.json
