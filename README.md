@@ -67,7 +67,7 @@ ABS_PASS=your_password
 ### Monday.com Integration (for schedule scraper)
 ```env
 MONDAY_API_TOKEN=your_monday_api_token
-MONDAY_BOARD_ID=your_board_id  # Optional: specify existing board
+MONDAY_BOARD_ID=your_board_id
 ```
 
 Alternative: set env vars in the shell for one session
@@ -86,7 +86,8 @@ Notes:
 - Keep `.env` private (do not commit it).
 - Shell env vars override `.env` for that session.
 - Get your Monday.com API token from: Account Settings → API → Generate new token
-- Board ID can be found in the Monday.com board URL or left empty to auto-create
+- Board ID can be found in the Monday.com board URL
+- **Python required** for board creation: `pip install pandas openpyxl` (if not already installed)
 
 ---
 
@@ -132,13 +133,25 @@ Outputs:
 
 ### Prerequisites for Monday.com Integration
 
-1. Set up Monday.com API token in `.env`:
+1. **Set up Monday.com API token in `.env`:**
 ```env
 MONDAY_API_TOKEN=your_monday_api_token
-MONDAY_BOARD_ID=your_board_id  # Optional: specify existing board
+MONDAY_BOARD_ID=your_board_id
 ```
 
-2. Create the Monday.com board (see `MONDAY_IMPORT_GUIDE.md` for details)
+2. **Create the Monday.com board manually:**
+   - Run `python create_monday_board.py` to generate `monday_board_import.xlsx`
+   - In Monday.com, go to your workspace
+   - Click the "+" button → "Import from Excel"
+   - Upload the `monday_board_import.xlsx` file
+   - Name the board "ABS Shift Data" (exact name required)
+   - After import, copy the Board ID from the URL and add it to your `.env` file
+
+   **Quick setup:**
+   ```bash
+   python create_monday_board.py
+   # Then upload monday_board_import.xlsx to Monday.com
+   ```
 
 ### Run Commands
 
@@ -173,6 +186,10 @@ node ./schedule_scrape.mjs
   - Run from your normal/trusted network.
 - Login issues:
   - Verify `.env` values and that the login page still uses `#UserName` / `#Password` fields.
+- **Monday.com board creation issues:**
+  - If `python create_monday_board.py` fails: Install Python dependencies with `pip install pandas openpyxl`
+  - If board import fails: Ensure the board is named exactly "ABS Shift Data"
+  - If sync fails: Check that `MONDAY_BOARD_ID` is set correctly in `.env`
 - Partial/empty results (Mobile Shift Maintenance):
   - The script automatically selects all exceptions and paginates the grid.
   - Verify the date range is the month you expect.
