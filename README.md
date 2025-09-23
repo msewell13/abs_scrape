@@ -280,6 +280,29 @@ npm run install-tasks    # Install Windows Task Scheduler tasks
 - **Logging**: All runs are logged to `logs/cron-YYYY-MM-DD.log`
 - **Timeout Protection**: Scripts timeout after 30 minutes
 - **Error Handling**: Comprehensive error reporting and recovery
+- **Sleep Mode Handling**: Automatically wakes up computer if sleeping
+- **Cross-Platform**: Works on Windows, macOS, and Linux
+
+### Sleep Mode Handling
+
+The cron scheduler automatically handles computers in sleep mode:
+
+**Windows:**
+- Uses `powercfg` to prevent sleep during execution
+- Windows Task Scheduler configured with `-WakeToRun` flag
+- Automatically disables sleep timeouts during script execution
+
+**macOS/Linux:**
+- Uses `caffeinate` (macOS) or system commands (Linux) to wake up
+- Checks system responsiveness before running scripts
+- Waits 30 seconds for full system wake-up
+
+**Wake-up Process:**
+1. **Detection**: Checks if computer is responsive
+2. **Wake-up**: Sends wake-up commands if needed
+3. **Wait**: Allows 30 seconds for system to fully wake up
+4. **Retry**: Up to 3 attempts if wake-up fails
+5. **Proceed**: Runs scripts even if wake-up partially fails
 
 ### Log Files
 

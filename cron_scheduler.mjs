@@ -20,6 +20,7 @@ import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import os from 'os';
 
 const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
@@ -31,7 +32,9 @@ const CONFIG = {
   maxLogFiles: 30, // Keep last 30 log files
   timeout: 30 * 60 * 1000, // 30 minutes timeout
   retries: 3,
-  retryDelay: 5000 // 5 seconds
+  retryDelay: 5000, // 5 seconds
+  wakeUpDelay: 30000, // 30 seconds to wake up
+  maxWakeUpAttempts: 3 // Try to wake up 3 times
 };
 
 class CronScheduler {
@@ -112,16 +115,27 @@ class CronScheduler {
 
   async runScheduleScraper() {
     this.log('=== Running Schedule Scraper ===');
+    
+    // Ensure computer is awake before running
+    await this.ensureComputerIsAwake();
+    
     return await this.runWithRetry('schedule_scrape.mjs');
   }
 
   async runMSMScraper() {
     this.log('=== Running MSM Scraper ===');
+    
+    // Ensure computer is awake before running
+    await this.ensureComputerIsAwake();
+    
     return await this.runWithRetry('mobile_shift_maintenance_scrape.mjs');
   }
 
   async runBothScrapers() {
     this.log('=== Running Both Scrapers ===');
+    
+    // Ensure computer is awake before running
+    await this.ensureComputerIsAwake();
     
     const results = {
       schedule: await this.runScheduleScraper(),
@@ -167,6 +181,85 @@ class CronScheduler {
     }
     
     this.log('Windows Task Scheduler setup completed');
+  }
+
+  async wakeUpComputer() {
+    const platform = os.platform();
+    this.log(`Attempting to wake up computer (${platform})...`);
+    
+    try {
+      if (platform === 'win32') {
+        // Windows: Use powercfg to prevent sleep and wake up
+        await execAsync('powercfg /change -standby-timeout-ac 0');
+        await execAsync('powercfg /change -standby-timeout-dc 0');
+        await execAsync('powercfg /change -hibernate-timeout-ac 0');
+        await execAsync('powercfg /change -hibernate-timeout-dc 0');
+        
+        // Send a wake-up signal (simulate user activity)
+        await execAsync('echo wakeup > nul');
+        
+        this.log('Windows wake-up commands executed');
+      } else if (platform === 'darwin') {
+        // macOS: Use caffeinate to prevent sleep
+        await execAsync('caffeinate -u -t 1');
+        this.log('macOS wake-up command executed');
+      } else if (platform === 'linux') {
+        // Linux: Use systemctl to wake up
+        try {
+          await execAsync('systemctl suspend-then-hibernate --dry-run');
+        } catch (error) {
+          // Fallback: simulate user activity
+          await execAsync('touch /tmp/wakeup_signal');
+        }
+        this.log('Linux wake-up command executed');
+      }
+      
+      // Wait for system to fully wake up
+      this.log(`Waiting ${CONFIG.wakeUpDelay/1000} seconds for system to wake up...`);
+      await new Promise(resolve => setTimeout(resolve, CONFIG.wakeUpDelay));
+      
+      return true;
+    } catch (error) {
+      this.log(`Wake-up attempt failed: ${error.message}`, 'WARN');
+      return false;
+    }
+  }
+
+  async ensureComputerIsAwake() {
+    this.log('Checking if computer is awake...');
+    
+    for (let attempt = 1; attempt <= CONFIG.maxWakeUpAttempts; attempt++) {
+      try {
+        // Test if system is responsive by checking system uptime
+        const uptime = os.uptime();
+        const lastBoot = new Date(Date.now() - uptime * 1000);
+        const timeSinceBoot = Date.now() - lastBoot.getTime();
+        
+        // If system was booted more than 5 minutes ago, assume it's awake
+        if (timeSinceBoot > 5 * 60 * 1000) {
+          this.log('Computer appears to be awake');
+          return true;
+        }
+        
+        this.log(`Attempt ${attempt}/${CONFIG.maxWakeUpAttempts}: Computer may be sleeping, attempting wake-up...`);
+        
+        if (await this.wakeUpComputer()) {
+          this.log('Wake-up successful');
+          return true;
+        }
+        
+        if (attempt < CONFIG.maxWakeUpAttempts) {
+          this.log(`Wake-up attempt ${attempt} failed, retrying in 10 seconds...`);
+          await new Promise(resolve => setTimeout(resolve, 10000));
+        }
+        
+      } catch (error) {
+        this.log(`Wake-up check failed: ${error.message}`, 'WARN');
+      }
+    }
+    
+    this.log('Could not ensure computer is awake, proceeding anyway...', 'WARN');
+    return false;
   }
 
   async cleanupOldLogs() {

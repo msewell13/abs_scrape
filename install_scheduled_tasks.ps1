@@ -63,8 +63,8 @@ function Create-ScheduledTask {
         # Create the trigger (weekdays at specified time)
         $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -At $ScheduleTime
         
-        # Create the settings
-        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RunOnlyIfNetworkAvailable
+        # Create the settings with wake-up capabilities
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RunOnlyIfNetworkAvailable -WakeToRun
         
         # Create the principal (run as current user)
         $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType InteractiveToken

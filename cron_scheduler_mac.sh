@@ -17,6 +17,8 @@ MAX_LOG_FILES=30
 TIMEOUT=1800  # 30 minutes in seconds
 RETRIES=3
 RETRY_DELAY=5
+WAKE_UP_DELAY=30  # 30 seconds to wake up
+MAX_WAKE_UP_ATTEMPTS=3
 
 # Colors for output
 RED='\033[0;31m'
@@ -44,6 +46,63 @@ log() {
     # Write to log file
     local log_file="$LOG_DIR/cron-$(date +%Y-%m-%d).log"
     echo "[$timestamp] [$level] $message" >> "$log_file"
+}
+
+# Wake up computer
+wake_up_computer() {
+    log "INFO" "Attempting to wake up computer..."
+    
+    # Detect OS
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS: Use caffeinate to prevent sleep
+        caffeinate -u -t 1
+        log "INFO" "macOS wake-up command executed"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Linux: Try to wake up from suspend
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl suspend-then-hibernate --dry-run 2>/dev/null || true
+        fi
+        # Fallback: simulate user activity
+        touch /tmp/wakeup_signal 2>/dev/null || true
+        log "INFO" "Linux wake-up command executed"
+    else
+        log "WARN" "Unknown OS, cannot wake up computer"
+        return 1
+    fi
+    
+    # Wait for system to fully wake up
+    log "INFO" "Waiting $WAKE_UP_DELAY seconds for system to wake up..."
+    sleep $WAKE_UP_DELAY
+    
+    return 0
+}
+
+# Ensure computer is awake
+ensure_computer_is_awake() {
+    log "INFO" "Checking if computer is awake..."
+    
+    for ((attempt=1; attempt<=MAX_WAKE_UP_ATTEMPTS; attempt++)); do
+        # Check if system is responsive by testing a simple command
+        if uptime >/dev/null 2>&1; then
+            log "INFO" "Computer appears to be awake"
+            return 0
+        fi
+        
+        log "INFO" "Attempt $attempt/$MAX_WAKE_UP_ATTEMPTS: Computer may be sleeping, attempting wake-up..."
+        
+        if wake_up_computer; then
+            log "INFO" "Wake-up successful"
+            return 0
+        fi
+        
+        if [ $attempt -lt $MAX_WAKE_UP_ATTEMPTS ]; then
+            log "INFO" "Wake-up attempt $attempt failed, retrying in 10 seconds..."
+            sleep 10
+        fi
+    done
+    
+    log "WARN" "Could not ensure computer is awake, proceeding anyway..."
+    return 1
 }
 
 # Run script with timeout and retries
@@ -85,18 +144,29 @@ run_script() {
 # Run schedule scraper
 run_schedule() {
     log "INFO" "=== Running Schedule Scraper ==="
+    
+    # Ensure computer is awake before running
+    ensure_computer_is_awake
+    
     run_script "schedule_scrape.mjs"
 }
 
 # Run MSM scraper
 run_msm() {
     log "INFO" "=== Running MSM Scraper ==="
+    
+    # Ensure computer is awake before running
+    ensure_computer_is_awake
+    
     run_script "mobile_shift_maintenance_scrape.mjs"
 }
 
 # Run both scrapers
 run_both() {
     log "INFO" "=== Running Both Scrapers ==="
+    
+    # Ensure computer is awake before running
+    ensure_computer_is_awake
     
     local schedule_success=0
     local msm_success=0
