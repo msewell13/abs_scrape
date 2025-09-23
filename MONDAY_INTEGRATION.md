@@ -11,7 +11,24 @@ This integration automatically syncs scraped shift data to Monday.com, creating 
 3. Go to "My Account" → "API" → "Generate Token"
 4. Copy the generated token
 
-### 2. Add Token to Environment
+### 2. Create a Board in Monday.com
+
+1. Go to your Monday.com workspace
+2. Create a new board named **"ABS Shift Data"**
+3. Add these columns (you can add them manually or let the script try to map them):
+   - **Date** (Date column)
+   - **Time** (Text column)
+   - **Start Time** (Text column)
+   - **End Time** (Text column)
+   - **Client** (Text column)
+   - **Employee** (Text column)
+   - **Location** (Text column)
+   - **Product** (Text column)
+   - **Bill Rate** (Text column)
+   - **Pay Rate** (Text column)
+   - **Status** (Status column)
+
+### 3. Add Token to Environment
 
 Add your Monday.com API token to your `.env` file:
 
@@ -24,9 +41,11 @@ ABS_SCHEDULE_URL=https://abs.brightstarcare.com/schedule/schedulemaster.aspx
 
 # Monday.com integration
 MONDAY_API_TOKEN=your_monday_api_token_here
+# Optional: If you want to use a specific board ID instead of searching by name
+# MONDAY_BOARD_ID=1234567890
 ```
 
-### 3. Run the Integration
+### 4. Run the Integration
 
 ```bash
 # Scrape data first

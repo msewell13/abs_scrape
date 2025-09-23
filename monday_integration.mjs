@@ -16,6 +16,7 @@ const __dirname = path.dirname(__filename);
 const MONDAY_API_URL = 'https://api.monday.com/v2';
 const MONDAY_API_TOKEN = process.env.MONDAY_API_TOKEN;
 const BOARD_NAME = 'ABS Shift Data';
+const BOARD_ID = process.env.MONDAY_BOARD_ID; // Optional: specify existing board ID
 
 // Column type mapping based on data analysis
 const COLUMN_MAPPINGS = {
@@ -47,7 +48,7 @@ class MondayIntegration {
     this.headers = {
       'Authorization': MONDAY_API_TOKEN,
       'Content-Type': 'application/json',
-      'API-Version': '2024-01'
+      'API-Version': '2024-07'
     };
   }
 
@@ -88,25 +89,137 @@ class MondayIntegration {
   async createBoard(boardName, columns) {
     console.log(`Creating board: ${boardName}`);
     
-    const columnDefinitions = columns.map(col => 
-      `"${col.title}": "${col.type}"`
-    ).join(', ');
+    // Try different approaches to create a board
+    const approaches = [
+      // Approach 1: Basic board creation
+      () => this.createBasicBoard(boardName),
+      // Approach 2: Board with workspace
+      () => this.createBoardWithWorkspace(boardName),
+      // Approach 3: Board with template
+      () => this.createBoardWithTemplate(boardName)
+    ];
+    
+    for (let i = 0; i < approaches.length; i++) {
+      try {
+        console.log(`Trying approach ${i + 1}...`);
+        const board = await approaches[i]();
+        
+        if (board) {
+          console.log(`Successfully created board with ID: ${board.id}`);
+          
+          // Add columns
+          await this.addColumnsToBoard(board.id, columns);
+          return board;
+        }
+      } catch (error) {
+        console.log(`Approach ${i + 1} failed:`, error.message);
+        if (i === approaches.length - 1) {
+          throw error; // Re-throw the last error
+        }
+      }
+    }
+  }
 
+  async createBasicBoard(boardName) {
     const query = `
       mutation {
         create_board(
           board_name: "${boardName}",
-          board_kind: private,
-          columns: {${columnDefinitions}}
+          board_kind: private
         ) {
           id
           name
         }
       }
     `;
-
+    
     const data = await this.makeRequest(query);
     return data.create_board;
+  }
+
+  async createBoardWithWorkspace(boardName) {
+    // First get the workspace ID
+    const workspaceQuery = `
+      query {
+        me {
+          account {
+            id
+          }
+        }
+      }
+    `;
+    
+    const workspaceData = await this.makeRequest(workspaceQuery);
+    const workspaceId = workspaceData.me.account.id;
+    
+    const query = `
+      mutation {
+        create_board(
+          board_name: "${boardName}",
+          board_kind: private,
+          workspace_id: ${workspaceId}
+        ) {
+          id
+          name
+        }
+      }
+    `;
+    
+    const data = await this.makeRequest(query);
+    return data.create_board;
+  }
+
+  async createBoardWithTemplate(boardName) {
+    // Try to create a board with a simple template
+    const query = `
+      mutation {
+        create_board(
+          board_name: "${boardName}",
+          board_kind: private,
+          template_id: 1
+        ) {
+          id
+          name
+        }
+      }
+    `;
+    
+    const data = await this.makeRequest(query);
+    return data.create_board;
+  }
+
+  async addColumnsToBoard(boardId, columns) {
+    console.log(`Adding ${columns.length} columns to board...`);
+    
+    // Wait a moment for the board to be fully created
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Add columns one by one
+    for (const column of columns) {
+      try {
+        const columnQuery = `
+          mutation {
+            create_column(
+              board_id: ${boardId},
+              title: "${column.title}",
+              column_type: ${column.type}
+            ) {
+              id
+              title
+            }
+          }
+        `;
+        
+        await this.makeRequest(columnQuery);
+        console.log(`Added column: ${column.title}`);
+        
+        // Small delay between column creations
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (error) {
+        console.error(`Failed to add column ${column.title}:`, error.message);
+        // Continue with other columns even if one fails
+      }
+    }
   }
 
   async getBoardColumns(boardId) {
@@ -205,21 +318,36 @@ class MondayIntegration {
       console.log(`Loaded ${records.length} records`);
 
       // Find or create board
-      let board = await this.findBoardByName(BOARD_NAME);
+      let board;
       
-      if (!board) {
-        console.log('Board not found, creating new board...');
-        
-        // Create column definitions
-        const columns = Object.entries(COLUMN_MAPPINGS).map(([title, type]) => ({
-          title,
-          type
-        }));
-        
-        board = await this.createBoard(BOARD_NAME, columns);
-        console.log(`Created board: ${board.name} (ID: ${board.id})`);
+      if (BOARD_ID) {
+        console.log(`Using specified board ID: ${BOARD_ID}`);
+        board = { id: BOARD_ID, name: BOARD_NAME };
       } else {
-        console.log(`Found existing board: ${board.name} (ID: ${board.id})`);
+        board = await this.findBoardByName(BOARD_NAME);
+        
+        if (!board) {
+          console.log('Board not found, creating new board...');
+          
+          // Create column definitions
+          const columns = Object.entries(COLUMN_MAPPINGS).map(([title, type]) => ({
+            title,
+            type
+          }));
+          
+          try {
+            board = await this.createBoard(BOARD_NAME, columns);
+            console.log(`Created board: ${board.name} (ID: ${board.id})`);
+          } catch (error) {
+            console.error('Failed to create board:', error.message);
+            console.log('\nThis might be due to API permissions. Please try:');
+            console.log('1. Check that your API token has "Create boards" permission');
+            console.log('2. Or create the board manually and set MONDAY_BOARD_ID in .env');
+            process.exit(1);
+          }
+        } else {
+          console.log(`Found existing board: ${board.name} (ID: ${board.id})`);
+        }
       }
 
       // Get board columns
@@ -274,21 +402,29 @@ class MondayIntegration {
 // Main execution
 async function main() {
   try {
+    console.log('Initializing Monday.com integration...');
     const integration = new MondayIntegration();
     const jsonFilePath = path.join(__dirname, 'month_block.json');
     
+    console.log(`Looking for data file: ${jsonFilePath}`);
     await integration.syncData(jsonFilePath);
     console.log('Monday.com integration completed successfully!');
     
   } catch (error) {
     console.error('Integration failed:', error.message);
+    console.error('Full error:', error);
     process.exit(1);
   }
 }
 
+export default MondayIntegration;
+
 // Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+console.log('Script loaded, checking if should run main...');
+console.log('process.argv[1]:', process.argv[1]);
+console.log('import.meta.url:', import.meta.url);
+
+if (process.argv[1] && process.argv[1].includes('monday_integration.mjs')) {
+  console.log('Running Monday.com integration...');
   main();
 }
-
-export default MondayIntegration;
