@@ -19,6 +19,7 @@ const BOARD_NAME = 'ABS Shift Data';
 const BOARD_ID = process.env.MONDAY_BOARD_ID; // Optional: specify existing board ID
 
 // Column type mapping based on data analysis
+// Note: The first column will be the item name, so we put date first in the mapping
 const COLUMN_MAPPINGS = {
   date: 'date',
   time: 'text',
@@ -276,9 +277,9 @@ class MondayIntegration {
     return allItems;
   }
 
-  async createItem(boardId, itemData, columns) {
-    // Create a unique name for the item (combination of key fields)
-    const itemName = `${itemData.client} - ${itemData.employee} - ${itemData.date}`.replace(/"/g, '\\"');
+  async createItem(boardId, itemData, columns, itemName) {
+    // Use the provided item name (date with index for uniqueness)
+    const safeItemName = itemName.replace(/"/g, '\\"');
     
     // Map data to column values
     const columnValues = {};
@@ -310,7 +311,7 @@ class MondayIntegration {
     // Use variables to avoid GraphQL syntax issues
     const variables = {
       boardId: boardId,
-      itemName: itemName,
+      itemName: safeItemName,
       columnValues: JSON.stringify(columnValues)
     };
 
@@ -386,25 +387,46 @@ class MondayIntegration {
       const existingItems = await this.getBoardItems(board.id);
       console.log(`Found ${existingItems.length} existing items`);
 
-      // Create a set of existing item names for quick lookup
-      const existingItemNames = new Set(
-        existingItems.map(item => item.name)
-      );
+      // Get column IDs from the board
+      const columnIds = {};
+      for (const column of columns) {
+        columnIds[column.title] = column.id;
+      }
+      console.log('Column IDs:', columnIds);
 
       // Process records and create new items
       let newItemsCount = 0;
       let skippedCount = 0;
 
-      for (const record of records) {
-        const itemName = `${record.client} - ${record.employee} - ${record.date}`;
+      for (let i = 0; i < records.length; i++) {
+        const record = records[i];
+        // Use just the date as item name for the first column
+        const itemName = record.date;
         
-        if (existingItemNames.has(itemName)) {
+        // Check if this specific combination already exists by looking at column values
+        // Since there's no date column, check by client and employee only
+        const existingItem = existingItems.find(item => {
+          const clientCol = item.column_values.find(col => col.id === columnIds.client);
+          const employeeCol = item.column_values.find(col => col.id === columnIds.employee);
+          
+          const isMatch = clientCol && employeeCol &&
+                 clientCol.text === record.client &&
+                 employeeCol.text === record.employee;
+          
+          if (isMatch) {
+            console.log(`Found duplicate: ${record.client} - ${record.employee} - ${record.date}`);
+          }
+          
+          return isMatch;
+        });
+        
+        if (existingItem) {
           skippedCount++;
           continue;
         }
 
         try {
-          await this.createItem(board.id, record, columns);
+          await this.createItem(board.id, record, columns, itemName);
           newItemsCount++;
           console.log(`Created item: ${itemName}`);
           
