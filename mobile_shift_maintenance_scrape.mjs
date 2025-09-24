@@ -474,10 +474,28 @@ async function run() {
       return mapped.filter(hasAnyValue);
     }, { pickHeaders, headerMap });
     
-    // Filter to only include records with exceptions
+    // Filter to only include records with exceptions and format exception data
     const pageRows = allPageRows.filter(obj => {
       const exceptionType = obj['Exception Type'] || obj['Exception Types'] || '';
       return exceptionType && exceptionType.trim() !== '';
+    }).map(obj => {
+      // Format exception data to separate multiple exceptions on new lines
+      if (obj['Exception Types']) {
+        // Split by common exception patterns and join with newlines
+        const exceptions = obj['Exception Types']
+          .replace(/([a-z])([A-Z])/g, '$1\n$2') // Add newline before capital letters after lowercase
+          .replace(/(Shift)([A-Z])/g, '$1\n$2') // Add newline after "Shift" before capital letters
+          .replace(/(Threshold)([A-Z])/g, '$1\n$2') // Add newline after "Threshold" before capital letters
+          .replace(/(Submitted)([A-Z])/g, '$1\n$2') // Add newline after "Submitted" before capital letters
+          .replace(/(Denied)([A-Z])/g, '$1\n$2') // Add newline after "Denied" before capital letters
+          .replace(/(Time)([A-Z])/g, '$1\n$2') // Add newline after "Time" before capital letters
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.length > 0)
+          .join('\n');
+        obj['Exception Types'] = exceptions;
+      }
+      return obj;
     });
     
     totalProcessed += allPageRows.length;
