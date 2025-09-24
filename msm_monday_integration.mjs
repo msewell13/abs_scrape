@@ -68,16 +68,14 @@ class MSMMondayIntegration {
   parseExceptionTypes(exceptionString) {
     if (!exceptionString) return [];
     
-    // For Monday.com dropdown, we need to match predefined combinations
-    // Split by newlines and clean up, then concatenate back to match predefined options
+    // Split by newlines and clean up to get individual exceptions
     const exceptions = exceptionString
       .split('\n')
       .map(line => line.trim())
       .filter(line => line.length > 0);
     
-    // Join exceptions without spaces to match Monday.com predefined options
-    // This matches the format like "Early Start ShiftEarly End Shift"
-    return [exceptions.join('')];
+    // Return each exception as a separate label
+    return exceptions;
   }
 
   async findBoardByName(boardName) {
