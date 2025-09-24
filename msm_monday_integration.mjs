@@ -65,6 +65,21 @@ class MSMMondayIntegration {
     return result.data;
   }
 
+  parseExceptionTypes(exceptionString) {
+    if (!exceptionString) return [];
+    
+    // For Monday.com dropdown, we need to match predefined combinations
+    // Split by newlines and clean up, then concatenate back to match predefined options
+    const exceptions = exceptionString
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+    
+    // Join exceptions without spaces to match Monday.com predefined options
+    // This matches the format like "Early Start ShiftEarly End Shift"
+    return [exceptions.join('')];
+  }
+
   async findBoardByName(boardName) {
     const query = `
       query {
@@ -211,6 +226,10 @@ class MSMMondayIntegration {
               // Handle special column types
               if (column.type === 'date') {
                 columnValue = value;
+              } else if (column.type === 'dropdown' && key === 'Exception Types') {
+                // Parse multiple exceptions for dropdown field
+                const exceptions = this.parseExceptionTypes(value);
+                columnValue = { labels: exceptions };
               }
               
               columnValues[column.id] = columnValue;
@@ -272,6 +291,10 @@ class MSMMondayIntegration {
         if (column.type === 'date') {
           // Convert date to Monday.com format (YYYY-MM-DD)
           columnValue = value;
+        } else if (column.type === 'dropdown' && key === 'Exception Types') {
+          // Parse multiple exceptions for dropdown field
+          const exceptions = this.parseExceptionTypes(value);
+          columnValue = { labels: exceptions };
         }
         
         columnValues[column.id] = columnValue;
