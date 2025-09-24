@@ -31,7 +31,7 @@ const COLUMN_MAPPINGS = {
   'Adjusted Start': 'text',
   'Adjusted End': 'text',
   'Adjusted Hrs': 'text',
-  'Exception Type': 'text'
+  'Exception Types': 'dropdown'
 };
 
 class MSMMondayIntegration {
