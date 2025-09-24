@@ -421,22 +421,73 @@ async function run() {
           }
           return obj;
         });
+      
+      // Filter to only include records that have exceptions
+      const hasException = (obj) => {
+        const exceptionType = obj['Exception Type'] || obj['Exception Types'] || '';
+        return exceptionType && exceptionType.trim() !== '';
+      };
+      
       const hasAnyValue = (obj) => Object.values(obj).some(v => v != null && String(v).trim() !== '');
-      return mapped.filter(hasAnyValue);
+      return mapped.filter(hasAnyValue).filter(hasException);
     }, { pickHeaders, headerMap });
   }
 
   // Collect all pages
   const allRows = [];
+  let totalProcessed = 0;
+  let totalWithExceptions = 0;
+  
   for (let p = 1; p <= totalPages; p++) {
     if (p > 1) {
       await changeKendoPage(p);
       // extra wait for grid content render
       await page.waitForSelector(`${GRID_WRAPPER} .k-grid-content table tbody tr`, { timeout: 15000 }).catch(() => {});
     }
-    const pageRows = await extractCurrentPageRows();
+    
+    // Get all rows first (before filtering)
+    const allPageRows = await page.$$eval(`${GRID_WRAPPER} .k-grid-content table tbody tr`, (trs, { pickHeaders, headerMap }) => {
+      const isDataRow = (tr) => {
+        const cls = tr.className || '';
+        if (/k-grouping-row|k-group-footer|k-detail-row|k-grid-norecords/i.test(cls)) return false;
+        const tds = tr.querySelectorAll('td');
+        return tds && tds.length > 0;
+      };
+      const getColText = (row, colIdx) => {
+        if (colIdx < 0) return null;
+        const cells = row.querySelectorAll('td');
+        const cell = cells[colIdx];
+        const text = cell ? (cell.textContent || '').trim().replace(/\s+/g, ' ') : '';
+        return text.length ? text : null;
+      };
+      const mapped = Array.from(trs)
+        .filter(isDataRow)
+        .map(tr => {
+          const obj = {};
+          for (const label of pickHeaders) {
+            const colIdx = Object.prototype.hasOwnProperty.call(headerMap, label) ? headerMap[label] : -1;
+            obj[label] = getColText(tr, colIdx);
+          }
+          return obj;
+        });
+      const hasAnyValue = (obj) => Object.values(obj).some(v => v != null && String(v).trim() !== '');
+      return mapped.filter(hasAnyValue);
+    }, { pickHeaders, headerMap });
+    
+    // Filter to only include records with exceptions
+    const pageRows = allPageRows.filter(obj => {
+      const exceptionType = obj['Exception Type'] || obj['Exception Types'] || '';
+      return exceptionType && exceptionType.trim() !== '';
+    });
+    
+    totalProcessed += allPageRows.length;
+    totalWithExceptions += pageRows.length;
     allRows.push(...pageRows);
+    
+    console.log(`Page ${p}/${totalPages}: ${pageRows.length} records with exceptions (${allPageRows.length} total processed)`);
   }
+  
+  console.log(`\nFiltering complete: ${totalWithExceptions} records with exceptions out of ${totalProcessed} total records`);
 
   // Write JSON
   await fs.writeFile(OUTPUT_JSON, JSON.stringify(allRows, null, 2), 'utf8');
