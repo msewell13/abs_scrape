@@ -68,14 +68,70 @@ class MSMMondayIntegration {
   parseExceptionTypes(exceptionString) {
     if (!exceptionString) return [];
     
-    // Split by newlines and clean up to get individual exceptions
-    const exceptions = exceptionString
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0);
+    // Check if the string has newlines (formatted) or is concatenated
+    let exceptions;
+    if (exceptionString.includes('\n')) {
+      // Split by newlines if formatted
+      exceptions = exceptionString
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+    } else {
+      // Split concatenated exceptions using regex patterns
+      exceptions = exceptionString
+        .replace(/([a-z])([A-Z])/g, '$1\n$2') // Add newline before capital letters after lowercase
+        .replace(/(Shift)([A-Z])/g, '$1\n$2') // Add newline after "Shift" before capital letters
+        .replace(/(Threshold)([A-Z])/g, '$1\n$2') // Add newline after "Threshold" before capital letters
+        .replace(/(Submitted)([A-Z])/g, '$1\n$2') // Add newline after "Submitted" before capital letters
+        .replace(/(Denied)([A-Z])/g, '$1\n$2') // Add newline after "Denied" before capital letters
+        .replace(/(Time)([A-Z])/g, '$1\n$2') // Add newline after "Time" before capital letters
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+    }
     
     // Return each exception as a separate label
     return exceptions;
+  }
+
+  async updateExceptionTypes(itemId, exceptionString, boardId, columns) {
+    try {
+      const exceptions = this.parseExceptionTypes(exceptionString);
+      const exceptionColumn = columns.find(col => col.title === 'Exception Types');
+      
+      if (!exceptionColumn) {
+        console.log('Exception Types column not found');
+        return;
+      }
+      
+      // Use comma-separated string format for change_simple_column_value
+      const exceptionValue = exceptions.join(',');
+      
+      const query = `
+        mutation ChangeSimpleColumnValue($itemId: ID!, $boardId: ID!, $columnId: String!, $value: String!) {
+          change_simple_column_value(
+            item_id: $itemId,
+            board_id: $boardId,
+            column_id: $columnId,
+            value: $value,
+            create_labels_if_missing: true
+          ) {
+            id
+          }
+        }
+      `;
+      
+      const variables = {
+        itemId: itemId,
+        boardId: boardId,
+        columnId: exceptionColumn.id,
+        value: exceptionValue
+      };
+      
+      await this.makeRequest(query, variables);
+    } catch (error) {
+      console.error(`Failed to update Exception Types for item ${itemId}:`, error.message);
+    }
   }
 
   async findBoardByName(boardName) {
@@ -225,9 +281,8 @@ class MSMMondayIntegration {
               if (column.type === 'date') {
                 columnValue = value;
               } else if (column.type === 'dropdown' && key === 'Exception Types') {
-                // Parse multiple exceptions for dropdown field
-                const exceptions = this.parseExceptionTypes(value);
-                columnValue = { labels: exceptions };
+                // Skip Exception Types for now - we'll update it separately
+                continue;
               }
               
               columnValues[column.id] = columnValue;
@@ -252,7 +307,13 @@ class MSMMondayIntegration {
             columnValues: JSON.stringify(columnValues)
           };
           
-          await this.makeRequest(query, variables);
+          const result = await this.makeRequest(query, variables);
+          
+          // Update Exception Types field separately with create_labels_if_missing
+          if (record['Exception Types']) {
+            await this.updateExceptionTypes(result.create_item.id, record['Exception Types'], boardId, columns);
+          }
+          
           return true;
         } catch (error) {
           console.error(`Failed to create item:`, error.message);
@@ -292,7 +353,7 @@ class MSMMondayIntegration {
         } else if (column.type === 'dropdown' && key === 'Exception Types') {
           // Parse multiple exceptions for dropdown field
           const exceptions = this.parseExceptionTypes(value);
-          columnValue = { labels: exceptions };
+          columnValue = exceptions.join(',');
         }
         
         columnValues[column.id] = columnValue;
