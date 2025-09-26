@@ -174,7 +174,7 @@ class MSMMondayIntegration {
     do {
       const query = `
         query {
-          boards(ids: [${boardId}]) {
+          boards(ids: [${parseInt(boardId)}]) {
             items_page(limit: ${limit}${cursor ? `, cursor: "${cursor}"` : ''}) {
               items {
                 id
@@ -389,6 +389,64 @@ class MSMMondayIntegration {
     return data.create_item;
   }
 
+  async updateItem(boardId, itemId, itemData, columns) {
+    // Map data to column values
+    const columnValues = {};
+    
+    for (const [key, value] of Object.entries(itemData)) {
+      const column = columns.find(col => col.title === key);
+      if (column && value !== null) {
+        let columnValue = value;
+        
+        // Handle special column types
+        if (column.type === 'date') {
+          // Convert date to Monday.com format (YYYY-MM-DD)
+          columnValue = value;
+        } else if (column.type === 'text' && key === 'Shift ID') {
+          // Convert Shift ID to text format for Monday.com
+          columnValue = value ? String(value) : null;
+        } else if (column.type === 'dropdown' && key === 'Exception Types') {
+          // Parse multiple exceptions for dropdown field
+          const exceptions = this.parseExceptionTypes(value);
+          columnValue = exceptions.join(',');
+        }
+        
+        columnValues[column.id] = columnValue;
+      }
+    }
+
+    // Use variables to avoid GraphQL syntax issues
+    const variables = {
+      itemId: itemId,
+      boardId: boardId,
+      columnValues: JSON.stringify(columnValues)
+    };
+
+    const query = `
+      mutation UpdateItem($itemId: ID!, $boardId: ID!, $columnValues: JSON!) {
+        change_multiple_column_values(
+          item_id: $itemId,
+          board_id: $boardId,
+          column_values: $columnValues
+        ) {
+          id
+        }
+      }
+    `;
+    
+    const data = await this.makeRequest(query, variables);
+    
+    // Update Exception Types separately if needed (for dropdown with create_labels_if_missing)
+    if (itemData['Exception Types']) {
+      const exceptionTypesColumn = columns.find(col => col.title === 'Exception Types');
+      if (exceptionTypesColumn) {
+        await this.updateExceptionTypes(itemId, itemData['Exception Types'], boardId, columns);
+      }
+    }
+    
+    return data.change_multiple_column_values;
+  }
+
   async syncData(data) {
     try {
       console.log('Starting MSM Monday.com integration...');
@@ -437,20 +495,78 @@ class MSMMondayIntegration {
       const columns = await this.getBoardColumns(board.id);
       console.log(`MSM board has ${columns.length} columns`);
 
-      // Clear all existing items first
-      console.log('Clearing existing MSM data...');
-      await this.deleteAllItems(board.id);
+      // Fetch existing items and create Shift ID lookup map
+      console.log('Fetching existing MSM items...');
+      const existingItems = await this.getBoardItems(board.id);
+      const shiftIdLookup = new Map();
+      
+      // Create lookup map: Shift ID -> Monday.com item ID
+      for (const item of existingItems) {
+        const shiftIdColumn = columns.find(col => col.title === 'Shift ID');
+        if (shiftIdColumn && item.column_values) {
+          const shiftIdValue = item.column_values.find(cv => cv.id === shiftIdColumn.id);
+          if (shiftIdValue && shiftIdValue.text) {
+            shiftIdLookup.set(shiftIdValue.text, item.id);
+            console.log(`Added to lookup: Shift ID "${shiftIdValue.text}" -> Item ID ${item.id}`);
+          } else {
+            console.log(`No Shift ID found for item ${item.id}:`, shiftIdValue);
+          }
+        }
+      }
+      
+      console.log(`Found ${existingItems.length} existing items in Monday.com`);
+      console.log(`Found ${shiftIdLookup.size} items with Shift IDs`);
+      console.log('Lookup map contents:', Array.from(shiftIdLookup.entries()));
 
-      // Then create new items
-      console.log(`Creating ${records.length} new MSM items...`);
+      // Process records: update existing or create new
+      let updatedCount = 0;
+      let createdCount = 0;
+      let failedCount = 0;
 
-      const newItemsCount = await this.createItemsBatch(board.id, records, columns);
-      const failedCount = records.length - newItemsCount;
+      console.log(`Processing ${records.length} scraped records...`);
+
+      for (const record of records) {
+        try {
+          const shiftId = record['Shift ID'];
+          if (!shiftId) {
+            console.log(`Skipping record without Shift ID: ${record.Customer} - ${record.Employee}`);
+            failedCount++;
+            continue;
+          }
+
+          console.log(`Processing record with Shift ID: "${shiftId}" (type: ${typeof shiftId})`);
+          console.log(`Looking for Shift ID in lookup map: ${shiftIdLookup.has(String(shiftId))}`);
+
+          if (shiftIdLookup.has(String(shiftId))) {
+            // Update existing item
+            const itemId = shiftIdLookup.get(String(shiftId));
+            await this.updateItem(board.id, itemId, record, columns);
+            updatedCount++;
+            console.log(`Updated item for Shift ID ${shiftId}`);
+          } else {
+            // Create new item
+            const itemName = record.Date || 'New Shift';
+            await this.createItem(board.id, record, columns, itemName);
+            createdCount++;
+            console.log(`Created new item for Shift ID ${shiftId}`);
+          }
+        } catch (error) {
+          console.error(`Failed to process record with Shift ID ${record['Shift ID']}:`, error.message);
+          failedCount++;
+        }
+      }
 
       console.log(`\nMSM Sync completed:`);
-      console.log(`- New items created: ${newItemsCount}`);
+      console.log(`- Items updated: ${updatedCount}`);
+      console.log(`- Items created: ${createdCount}`);
       console.log(`- Items failed: ${failedCount}`);
       console.log(`- Total processed: ${records.length}`);
+      
+      if (updatedCount > 0 || createdCount > 0) {
+        console.log('✅ Successfully synced MSM data to Monday.com');
+      } else {
+        console.log('❌ No items were processed');
+      }
 
     } catch (error) {
       console.error('MSM Monday.com integration failed:', error.message);
