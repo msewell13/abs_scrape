@@ -554,7 +554,21 @@ async function run() {
       const row = rows[i];
       console.log(`Scraping shift ID for row ${i + 1}/${rows.length} (${row.Customer} - ${row.Employee})`);
       
-      // Use the actual DOM element to find the gear icon
+      // Extract adjusted times from the main grid row
+      const adjustedTimes = await page.evaluate((trElement) => {
+        const adjStartInput = trElement.querySelector('input[id*="adjStartTxt"]');
+        const adjEndInput = trElement.querySelector('input[id*="adjEndTxt"]');
+        
+        return {
+          adjustedStart: adjStartInput ? (adjStartInput.value || adjStartInput.getAttribute('value') || '') : null,
+          adjustedEnd: adjEndInput ? (adjEndInput.value || adjEndInput.getAttribute('value') || '') : null
+        };
+      }, row._domElement);
+      
+      row['Adjusted Start'] = adjustedTimes.adjustedStart;
+      row['Adjusted End'] = adjustedTimes.adjustedEnd;
+      
+      // Use the actual DOM element to find the gear icon and get shift ID
       const shiftId = await scrapeShiftIdFromElement(row._domElement, i + 1);
       row['Shift ID'] = shiftId;
       
@@ -566,7 +580,7 @@ async function run() {
     return rows;
   }
 
-  // Helper: scrape shift ID from a specific DOM element
+  // Helper: scrape shift ID and adjusted times from a specific DOM element
   async function scrapeShiftIdFromElement(trElement, rowNumber) {
     try {
       // First, dismiss any existing overlays or popups
@@ -661,8 +675,10 @@ async function run() {
       });
       console.log(`Debug info after clicking "Show Shift" for row ${rowNumber}:`, debugInfo);
       
-      // Try multiple approaches to get the shift ID
+      // Try multiple approaches to get the shift ID and adjusted times
       let shiftNumber = null;
+      let adjustedStart = null;
+      let adjustedEnd = null;
       
       // Approach 1: Look for the divViewShiftPopup (without data-role requirement)
       try {
@@ -672,7 +688,7 @@ async function run() {
         // Wait for the popup content to load
         
         // Look for shift ID in the popup
-        shiftNumber = await page.evaluate(() => {
+        const popupData = await page.evaluate(() => {
           const popup = document.querySelector('#divViewShiftPopup');
           if (popup) {
             console.log('divViewShiftPopup found, checking for shift number...');
@@ -681,6 +697,8 @@ async function run() {
             console.log('Popup offsetParent:', popup.offsetParent !== null);
             console.log('Popup classList:', popup.classList.toString());
             console.log('Popup data-role:', popup.getAttribute('data-role'));
+            
+            let shiftNumber = null;
             
             // Look for divShiftNumber inside the popup
             const shiftDiv = popup.querySelector('#divShiftNumber');
@@ -694,58 +712,65 @@ async function run() {
               if (shiftMatch) {
                 const number = parseInt(shiftMatch[1], 10);
                 console.log('Extracted shift number from regex:', number);
-                return number;
-              }
-              
-              // Fallback: look for any 8-digit number in the text
-              const eightDigitMatch = text.match(/\b\d{8}\b/);
-              if (eightDigitMatch) {
-                console.log('Found 8-digit number in divShiftNumber:', eightDigitMatch[0]);
-                return parseInt(eightDigitMatch[0], 10);
-              }
-              
-              // Additional fallback: check if text contains "Shift #:" and extract number
-              if (text.includes('Shift #:')) {
-                const parts = text.split('Shift #:');
-                if (parts.length > 1) {
-                  const numberPart = parts[1].trim();
-                  const numberMatch = numberPart.match(/\d{8}/);
-                  if (numberMatch) {
-                    const number = parseInt(numberMatch[0], 10);
-                    console.log('Extracted shift number from split method:', number);
-                    return number;
+                shiftNumber = number;
+              } else {
+                // Fallback: look for any 8-digit number in the text
+                const eightDigitMatch = text.match(/\b\d{8}\b/);
+                if (eightDigitMatch) {
+                  console.log('Found 8-digit number in divShiftNumber:', eightDigitMatch[0]);
+                  shiftNumber = parseInt(eightDigitMatch[0], 10);
+                } else {
+                  // Additional fallback: check if text contains "Shift #:" and extract number
+                  if (text.includes('Shift #:')) {
+                    const parts = text.split('Shift #:');
+                    if (parts.length > 1) {
+                      const numberPart = parts[1].trim();
+                      const numberMatch = numberPart.match(/\d{8}/);
+                      if (numberMatch) {
+                        const number = parseInt(numberMatch[0], 10);
+                        console.log('Extracted shift number from split method:', number);
+                        shiftNumber = number;
+                      }
+                    }
                   }
                 }
               }
             }
             
-            // Always search the entire popup content for 8-digit numbers as fallback
-            console.log('Searching entire popup for 8-digit numbers...');
-            const popupText = popup.textContent || popup.innerText || '';
-            console.log('Popup text content length:', popupText.length);
-            console.log('Popup text content preview:', popupText.substring(0, 500));
-            const eightDigitMatch = popupText.match(/\b\d{8}\b/);
-            if (eightDigitMatch) {
-              console.log('Found 8-digit number in popup:', eightDigitMatch[0]);
-              return parseInt(eightDigitMatch[0], 10);
-            }
             
-            // Check if popup is hidden but has content
-            if (popupText.length > 0) {
-              console.log('Popup has content but may be hidden, checking all elements...');
-              const allElements = popup.querySelectorAll('*');
-              for (const el of allElements) {
-                const text = el.textContent || el.innerText || '';
-                const eightDigitMatch = text.match(/\b\d{8}\b/);
-                if (eightDigitMatch) {
-                  console.log('Found 8-digit number in popup element:', el.tagName, el.id, el.className, eightDigitMatch[0]);
-                  return parseInt(eightDigitMatch[0], 10);
+            // If we still don't have shift number, search the entire popup content
+            if (!shiftNumber) {
+              console.log('Searching entire popup for 8-digit numbers...');
+              const popupText = popup.textContent || popup.innerText || '';
+              console.log('Popup text content length:', popupText.length);
+              console.log('Popup text content preview:', popupText.substring(0, 500));
+              const eightDigitMatch = popupText.match(/\b\d{8}\b/);
+              if (eightDigitMatch) {
+                console.log('Found 8-digit number in popup:', eightDigitMatch[0]);
+                shiftNumber = parseInt(eightDigitMatch[0], 10);
+              } else if (popupText.length > 0) {
+                console.log('Popup has content but may be hidden, checking all elements...');
+                const allElements = popup.querySelectorAll('*');
+                for (const el of allElements) {
+                  const text = el.textContent || el.innerText || '';
+                  const eightDigitMatch = text.match(/\b\d{8}\b/);
+                  if (eightDigitMatch) {
+                    console.log('Found 8-digit number in popup element:', el.tagName, el.id, el.className, eightDigitMatch[0]);
+                    shiftNumber = parseInt(eightDigitMatch[0], 10);
+                    break;
+                  }
                 }
               }
             }
+            
+            return shiftNumber;
           }
           return null;
         });
+        
+        if (popupData) {
+          shiftNumber = popupData;
+        }
         
         if (shiftNumber) {
           console.log(`Found shift ID via divViewShiftPopup for row ${rowNumber}: ${shiftNumber}`);
