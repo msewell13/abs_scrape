@@ -308,6 +308,8 @@ async function run() {
     // Product and Position columns
     'Product',
     'Position',
+    // Comments column
+    'Comments',
     // Exception columns (add both common variants)
     'Exception Type',
     'Exception Types',
@@ -543,6 +545,36 @@ async function run() {
         // This is a row with exceptions, add it to our list
         rowData._domElement = tr;
         rowData._dataRowIndex = dataRowIndex;
+        
+        // Look for comments in the next row (detail row)
+        const nextRow = dataRows[i + 1];
+        if (nextRow) {
+          const nextRowClass = await nextRow.getAttribute('class') || '';
+          if (nextRowClass.includes('k-detail-row')) {
+            // Extract comments from the detail row
+            const comments = await page.evaluate((detailRow) => {
+              const detailCell = detailRow.querySelector('td.k-detail-cell');
+              if (detailCell) {
+                const text = detailCell.textContent || detailCell.innerText || '';
+                // Remove "Comments:" prefix and check if it's not "No records to display"
+                if (text.startsWith('Comments:')) {
+                  const commentText = text.replace(/^Comments:\s*/, '').trim();
+                  if (commentText !== 'No records to display' && commentText.length > 0) {
+                    return commentText;
+                  }
+                }
+              }
+              return null;
+            }, nextRow);
+            
+            rowData['Comments'] = comments;
+          } else {
+            rowData['Comments'] = null;
+          }
+        } else {
+          rowData['Comments'] = null;
+        }
+        
         rows.push(rowData);
       }
       
