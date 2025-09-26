@@ -51,22 +51,36 @@ class MSMMondayIntegration {
   }
 
   async makeRequest(query, variables = {}) {
-    const response = await fetch(MONDAY_API_URL, {
-      method: 'POST',
-      headers: this.headers,
-      body: JSON.stringify({
-        query,
-        variables
-      })
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    try {
+      const response = await fetch(MONDAY_API_URL, {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify({
+          query,
+          variables
+        }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
 
-    const result = await response.json();
-    
-    if (result.errors) {
-      throw new Error(`Monday.com API Error: ${JSON.stringify(result.errors)}`);
+      const result = await response.json();
+      
+      if (result.errors) {
+        throw new Error(`Monday.com API Error: ${JSON.stringify(result.errors)}`);
+      }
+      
+      return result.data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Monday.com API request timed out after 10 seconds');
+      }
+      throw error;
     }
-    
-    return result.data;
   }
 
   parseExceptionTypes(exceptionString) {
@@ -624,7 +638,9 @@ class MSMMondayIntegration {
       // Track which Shift IDs we've processed from the scraped data
       const processedShiftIds = new Set();
 
-      for (const record of records) {
+      for (let i = 0; i < records.length; i++) {
+        const record = records[i];
+        console.log(`Processing record ${i + 1}/${records.length}...`);
         try {
           const shiftId = record['Shift ID'];
           if (!shiftId) {
@@ -632,9 +648,6 @@ class MSMMondayIntegration {
             failedCount++;
             continue;
           }
-
-          console.log(`Processing record with Shift ID: "${shiftId}" (type: ${typeof shiftId})`);
-          console.log(`Looking for Shift ID in lookup map: ${shiftIdLookup.has(String(shiftId))}`);
 
           // Track this Shift ID as processed
           processedShiftIds.add(String(shiftId));
@@ -644,13 +657,13 @@ class MSMMondayIntegration {
             const itemId = shiftIdLookup.get(String(shiftId));
             await this.updateItem(board.id, itemId, record, columns);
             updatedCount++;
-            console.log(`Updated item for Shift ID ${shiftId}`);
+            console.log(`✓ Updated item for Shift ID ${shiftId}`);
           } else {
             // Create new item
             const itemName = record.Date || 'New Shift';
             await this.createItem(board.id, record, columns, itemName);
             createdCount++;
-            console.log(`Created new item for Shift ID ${shiftId}`);
+            console.log(`✓ Created new item for Shift ID ${shiftId}`);
           }
         } catch (error) {
           console.error(`Failed to process record with Shift ID ${record['Shift ID']}:`, error.message);
