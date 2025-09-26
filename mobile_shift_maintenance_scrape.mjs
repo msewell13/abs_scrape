@@ -1143,6 +1143,29 @@ async function run() {
     const msmIntegration = new MSMMondayIntegration();
     await msmIntegration.syncData(allRows); // Pass data directly
     console.log('✅ Successfully synced MSM data to Monday.com');
+    
+    // Check for new comments that need to be logged
+    console.log('\n=== Checking for new comments to log ===');
+    await logNewComments(allRows, page);
+    
+    // Final sync to Monday.com with updated CommentsLogged status
+    console.log('\n=== Final sync to Monday.com with updated Comments Logged status ===');
+    
+    // Debug: Check which records have CommentsLogged = true
+    const recordsWithLoggedComments = allRows.filter(r => r.CommentsLogged === true);
+    console.log(`Found ${recordsWithLoggedComments.length} records with CommentsLogged = true`);
+    recordsWithLoggedComments.forEach(r => {
+      console.log(`- ${r.Customer} - ${r.Employee}: CommentsLogged = ${r.CommentsLogged}`);
+    });
+    
+    try {
+      // Use the updated allRows that have CommentsLogged status set
+      // Skip the data fetching and just update the records directly
+      await msmIntegration.updateCommentsLoggedStatus(allRows);
+      console.log('✅ Successfully updated Comments Logged status in Monday.com');
+    } catch (error) {
+      console.error('❌ Failed to update Comments Logged status:', error.message);
+    }
   } catch (error) {
     console.error('❌ MSM Monday.com sync failed:', error.message);
     console.log('\nFalling back to local file output...');
@@ -1150,6 +1173,316 @@ async function run() {
   }
 
   await browser.close();
+}
+
+// Function to log new comments using Call Logger
+async function logNewComments(records, page) {
+  try {
+    // First, fetch existing Monday.com data to check Comments Logged status
+    console.log('Fetching existing Monday.com data to check Comments Logged status...');
+    const msmIntegration = new MSMMondayIntegration();
+    const boardId = process.env.MONDAY_MSM_BOARD_ID;
+    
+    if (!boardId) {
+      console.log('❌ MONDAY_MSM_BOARD_ID not set, cannot check Comments Logged status');
+      return;
+    }
+    
+    const existingItems = await msmIntegration.getBoardItems(boardId);
+    const columns = await msmIntegration.getBoardColumns(boardId);
+    
+    // Create a map of Shift ID -> Comments Logged status
+    const commentsLoggedMap = new Map();
+    const shiftIdColumn = columns.find(col => col.title === 'Shift ID');
+    const commentsLoggedColumn = columns.find(col => col.title === 'Comments Logged');
+    
+    for (const item of existingItems) {
+      if (shiftIdColumn && commentsLoggedColumn && item.column_values) {
+        const shiftIdValue = item.column_values.find(cv => cv.id === shiftIdColumn.id);
+        const commentsLoggedValue = item.column_values.find(cv => cv.id === commentsLoggedColumn.id);
+        
+        if (shiftIdValue && shiftIdValue.text) {
+          let commentsLogged = false;
+          if (commentsLoggedValue && commentsLoggedValue.value) {
+            try {
+              const valueObj = JSON.parse(commentsLoggedValue.value);
+              commentsLogged = valueObj.checked === true;
+            } catch (e) {
+              commentsLogged = commentsLoggedValue.text === 'true' || commentsLoggedValue.text === 'Yes';
+            }
+          }
+          commentsLoggedMap.set(shiftIdValue.text, commentsLogged);
+        }
+      }
+    }
+    
+    console.log(`Found Comments Logged status for ${commentsLoggedMap.size} existing records`);
+    
+    // Filter records that have comments and haven't been logged yet
+    const recordsWithComments = records.filter(record => {
+      const hasComments = record.Comments && 
+        record.Comments.trim().length > 0 && 
+        record.Comments !== 'No records to display' && 
+        record.Comments !== 'No records to display.';
+      
+      if (!hasComments) return false;
+      
+      // Check if already logged in Monday.com
+      const shiftId = String(record['Shift ID']);
+      const alreadyLogged = commentsLoggedMap.get(shiftId) || false;
+      
+      if (alreadyLogged) {
+        console.log(`Comment already logged for Shift ID ${shiftId}: ${record.Customer} - ${record.Employee}`);
+      }
+      
+      return !alreadyLogged;
+    });
+
+    if (recordsWithComments.length === 0) {
+      console.log('No new comments found to log (all comments already processed)');
+      return;
+    }
+
+    console.log(`Found ${recordsWithComments.length} new comments to log`);
+
+    // Process all records with new comments
+    for (let i = 0; i < recordsWithComments.length; i++) {
+      const recordToLog = recordsWithComments[i];
+      console.log(`\n--- Processing comment ${i + 1}/${recordsWithComments.length} ---`);
+      console.log(`Logging comment for: ${recordToLog.Customer} - ${recordToLog.Employee}`);
+      console.log(`Comment: ${recordToLog.Comments}`);
+
+      // Click the Call Logger button
+      const callLoggerButton = page.locator('button[onclick="CallLogger_Click()"]');
+      if (await callLoggerButton.count() > 0) {
+        await callLoggerButton.click();
+        console.log('✅ Clicked Call Logger button');
+        
+        // Wait for the modal to appear
+        await page.waitForSelector('#callLoggerModal', { state: 'visible', timeout: 5000 });
+        console.log('✅ Call Logger modal opened');
+        
+        // Fill out the form and save
+        const success = await fillCallLoggerForm(recordToLog, page);
+        
+        // If successful, mark this comment as logged
+        if (success) {
+          recordToLog.CommentsLogged = true;
+          // Also update the original record in the main data array
+          const originalRecord = records.find(r => r['Shift ID'] === recordToLog['Shift ID']);
+          if (originalRecord) {
+            originalRecord.CommentsLogged = true;
+          }
+          console.log('✅ Comment marked as logged');
+        }
+        
+        // Wait a moment before processing the next record
+        if (i < recordsWithComments.length - 1) {
+          console.log('⏳ Waiting before processing next comment...');
+          await page.waitForTimeout(2000);
+          
+          // Ensure the modal is closed before proceeding
+          const modal = page.locator('#callLoggerModal');
+          if (await modal.isVisible()) {
+            console.log('⚠️ Modal still open, closing it...');
+            const cancelButton = page.locator('button[data-dismiss="modal"]').filter({ hasText: 'Cancel' });
+            await cancelButton.click();
+            await page.waitForTimeout(1000);
+          }
+        }
+        
+      } else {
+        console.log('❌ Call Logger button not found');
+      }
+    }
+
+  } catch (error) {
+    console.error('❌ Error logging comments:', error.message);
+  }
+}
+
+// Function to fill out the Call Logger form
+async function fillCallLoggerForm(record, page) {
+  try {
+    // Set the date/time - use the record date + Sch Start time
+    const recordDate = record.Date; // Format: YYYY-MM-DD
+    const schStart = record['Sch Start']; // Format: HH:MM AM/PM
+    
+    // Convert to the format expected by the datetime picker
+    const dateTimeValue = `${recordDate} ${schStart}`;
+    
+    // Set the date/time field
+    const dateTimeInput = page.locator('#CallLogger_NoteDate');
+    await dateTimeInput.fill(dateTimeValue);
+    console.log(`✅ Set date/time to: ${dateTimeValue}`);
+    
+    // Select the Type dropdown - "(Neutral) - Patient Update"
+    // Click on the dropdown wrapper instead of the hidden input
+    const typeDropdownWrapper = page.locator('#divDdlNoteType .k-dropdown-wrap');
+    await typeDropdownWrapper.click();
+    console.log('✅ Clicked Type dropdown wrapper');
+    
+    // Wait for dropdown options to appear
+    await page.waitForTimeout(1000);
+    
+    // Look for the "(Neutral) - Patient Update" option
+    const neutralOption = page.locator('text=(Neutral) - Patient Update');
+    if (await neutralOption.count() > 0) {
+      await neutralOption.click();
+      console.log('✅ Selected "(Neutral) - Patient Update" type');
+    } else {
+      console.log('❌ Could not find "(Neutral) - Patient Update" option');
+      // Let's see what options are available
+      const allOptions = await page.locator('.k-list .k-item').allTextContents();
+      console.log('Available options:', allOptions);
+    }
+    
+    // Fill in the Employee field (autocomplete dropdown)
+    const employeeInput = page.locator('#acEmployee');
+    const employeeLastName = record.Employee.split(',')[0].trim(); // Get last name before comma
+    await employeeInput.fill(employeeLastName);
+    console.log(`✅ Set employee to: ${employeeLastName}`);
+    
+    // Wait for dropdown options to appear and select the first match
+    await page.waitForTimeout(1500);
+    
+    // Try multiple selectors for employee dropdown
+    let employeeDropdown = null;
+    const employeeSelectors = [
+      '#acEmployee_listbox .k-item',
+      '#acEmployee_listbox li',
+      '[aria-owns="acEmployee_listbox"] .k-item',
+      '.k-list .k-item'
+    ];
+    
+    for (const selector of employeeSelectors) {
+      employeeDropdown = page.locator(selector);
+      if (await employeeDropdown.count() > 0) {
+        console.log(`Found employee dropdown with selector: ${selector} (${await employeeDropdown.count()} options)`);
+        break;
+      }
+    }
+    
+    if (employeeDropdown && await employeeDropdown.count() > 0) {
+      // If multiple options, try to find exact match first
+      const options = await employeeDropdown.allTextContents();
+      console.log(`Available employee options: ${options.join(', ')}`);
+      
+      // Look for exact match with the full name
+      const fullEmployeeName = record.Employee;
+      let selectedOption = null;
+      
+      for (let i = 0; i < options.length; i++) {
+        if (options[i].includes(employeeLastName) || options[i].includes(fullEmployeeName)) {
+          selectedOption = employeeDropdown.nth(i);
+          console.log(`Found matching employee option: ${options[i]}`);
+          break;
+        }
+      }
+      
+      if (selectedOption) {
+        await selectedOption.click();
+        console.log(`✅ Selected matching employee from dropdown`);
+      } else {
+        await employeeDropdown.first().click();
+        console.log(`✅ Selected first employee option from dropdown`);
+      }
+    } else {
+      console.log(`⚠️ No employee dropdown options found for: ${employeeLastName}`);
+      // Try pressing Enter as fallback
+      await employeeInput.press('Enter');
+      console.log(`Tried pressing Enter for employee field`);
+    }
+    
+    // Fill in the Customer field (autocomplete dropdown)
+    const customerInput = page.locator('#acCustomer');
+    const customerLastName = record.Customer.split(',')[0].trim(); // Get last name before comma
+    await customerInput.fill(customerLastName);
+    console.log(`✅ Set customer to: ${customerLastName}`);
+    
+    // Wait for dropdown options to appear and select the first match
+    await page.waitForTimeout(1500);
+    
+    // Try multiple selectors for customer dropdown
+    let customerDropdown = null;
+    const customerSelectors = [
+      '#acCustomer_listbox .k-item',
+      '#acCustomer_listbox li',
+      '[aria-owns="acCustomer_listbox"] .k-item',
+      '.k-list .k-item'
+    ];
+    
+    for (const selector of customerSelectors) {
+      customerDropdown = page.locator(selector);
+      if (await customerDropdown.count() > 0) {
+        console.log(`Found customer dropdown with selector: ${selector} (${await customerDropdown.count()} options)`);
+        break;
+      }
+    }
+    
+    if (customerDropdown && await customerDropdown.count() > 0) {
+      // If multiple options, try to find exact match first
+      const options = await customerDropdown.allTextContents();
+      console.log(`Available customer options: ${options.join(', ')}`);
+      
+      // Look for exact match with the full name
+      const fullCustomerName = record.Customer;
+      let selectedOption = null;
+      
+      for (let i = 0; i < options.length; i++) {
+        if (options[i].includes(customerLastName) || options[i].includes(fullCustomerName)) {
+          selectedOption = customerDropdown.nth(i);
+          console.log(`Found matching customer option: ${options[i]}`);
+          break;
+        }
+      }
+      
+      if (selectedOption) {
+        await selectedOption.click();
+        console.log(`✅ Selected matching customer from dropdown`);
+      } else {
+        await customerDropdown.first().click();
+        console.log(`✅ Selected first customer option from dropdown`);
+      }
+    } else {
+      console.log(`⚠️ No customer dropdown options found for: ${customerLastName}`);
+      // Try pressing Enter as fallback
+      await customerInput.press('Enter');
+      console.log(`Tried pressing Enter for customer field`);
+    }
+    
+    // Fill in the Call Notes with the comments
+    const notesTextarea = page.locator('#CallLogger_NoteText');
+    await notesTextarea.fill(record.Comments);
+    console.log(`✅ Set call notes to: ${record.Comments}`);
+    
+    // Click the Save button
+    const saveButton = page.locator('#btnCallLoggerSave');
+    await saveButton.click();
+    console.log('✅ Clicked Save button');
+    
+    // Wait for the modal to close after saving (with shorter timeout)
+    try {
+      await page.waitForSelector('#callLoggerModal', { state: 'hidden', timeout: 5000 });
+      console.log('✅ Call Logger entry saved successfully');
+      return true; // Success
+    } catch (error) {
+      console.log('⚠️ Modal did not close automatically, but entry was likely saved');
+      // Try to close the modal manually if it's still open
+      const modal = page.locator('#callLoggerModal');
+      if (await modal.isVisible()) {
+        // Use the Cancel button specifically (not Clear)
+        const cancelButton = page.locator('button[data-dismiss="modal"]').filter({ hasText: 'Cancel' });
+        await cancelButton.click();
+        console.log('✅ Manually closed Call Logger modal');
+      }
+      return true; // Still consider it successful if we got this far
+    }
+    
+  } catch (error) {
+    console.error('❌ Error filling Call Logger form:', error.message);
+    return false; // Failed
+  }
 }
 
 run().catch(err => {

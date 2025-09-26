@@ -34,6 +34,7 @@ const COLUMN_MAPPINGS = {
   'Product': 'text',
   'Position': 'text',
   'Comments': 'text',
+  'Comments Logged': 'checkbox',
   'Exception Types': 'dropdown',
   'Shift ID': 'text'
 };
@@ -183,6 +184,26 @@ class MSMMondayIntegration {
     return data.boards[0].columns;
   }
 
+  async createColumn(boardId, title, type) {
+    const mutation = `
+      mutation {
+        create_column(
+          board_id: ${parseInt(boardId)}
+          title: "${title}"
+          column_type: ${type}
+        ) {
+          id
+          title
+          type
+        }
+      }
+    `;
+    
+    const data = await this.makeRequest(mutation);
+    console.log(`✅ Created column: ${title} (${type})`);
+    return data.create_column;
+  }
+
   async getBoardItems(boardId) {
     const allItems = [];
     let cursor = null;
@@ -199,6 +220,7 @@ class MSMMondayIntegration {
                 column_values {
                   id
                   text
+                  value
                 }
               }
               cursor
@@ -379,7 +401,7 @@ class MSMMondayIntegration {
           
           for (const [key, value] of Object.entries(record)) {
             const column = columns.find(col => col.title === key);
-            if (column && (value !== null || key === 'Comments')) {
+            if (column && (value !== null || key === 'Comments' || key === 'Comments Logged')) {
               let columnValue = value;
               
               // Handle special column types
@@ -388,6 +410,9 @@ class MSMMondayIntegration {
               } else if (column.type === 'text' && key === 'Shift ID') {
                 // Convert Shift ID to text format for Monday.com
                 columnValue = value ? String(value) : null;
+              } else if (column.type === 'checkbox' && key === 'Comments Logged') {
+                // Format checkbox value for Monday.com
+                columnValue = value ? '{"checked": "true"}' : '{"checked": "false"}';
               } else if (column.type === 'dropdown' && key === 'Exception Types') {
                 // Skip Exception Types for now - we'll update it separately
                 continue;
@@ -499,7 +524,7 @@ class MSMMondayIntegration {
     
     for (const [key, value] of Object.entries(itemData)) {
       const column = columns.find(col => col.title === key);
-      if (column && (value !== null || key === 'Comments')) {
+      if (column && (value !== null || key === 'Comments' || key === 'Comments Logged')) {
         let columnValue = value;
         
         // Handle special column types
@@ -509,6 +534,9 @@ class MSMMondayIntegration {
         } else if (column.type === 'text' && key === 'Shift ID') {
           // Convert Shift ID to text format for Monday.com
           columnValue = value ? String(value) : null;
+        } else if (column.type === 'checkbox' && key === 'Comments Logged') {
+          // Format checkbox value for Monday.com
+          columnValue = value ? '{"checked": "true"}' : '{"checked": "false"}';
         } else if (column.type === 'dropdown' && key === 'Exception Types') {
           // Parse multiple exceptions for dropdown field
           const exceptions = this.parseExceptionTypes(value);
@@ -549,6 +577,80 @@ class MSMMondayIntegration {
     }
     
     return data.change_multiple_column_values;
+  }
+
+  async updateCommentsLoggedStatus(records) {
+    try {
+      console.log('Updating Comments Logged status for records...');
+      
+      // Get board info
+      const board = await this.findBoardByName('MSM Shift Data');
+      if (!board) {
+        throw new Error('MSM Shift Data board not found');
+      }
+      
+      // Get board columns
+      const columns = await this.getBoardColumns(board.id);
+      const commentsLoggedColumn = columns.find(col => col.title === 'Comments Logged');
+      
+      if (!commentsLoggedColumn) {
+        console.log('Comments Logged column not found, skipping update');
+        return;
+      }
+      
+      // Update each record's Comments Logged status
+      for (const record of records) {
+        if (record['Shift ID']) {
+          try {
+            // Find the item by Shift ID
+            const existingItems = await this.getBoardItems(board.id);
+            const item = existingItems.find(item => {
+              const shiftIdValue = item.column_values.find(cv => {
+                const column = columns.find(col => col.title === 'Shift ID');
+                return column && cv.id === column.id;
+              });
+              return shiftIdValue && shiftIdValue.text === String(record['Shift ID']);
+            });
+            
+            if (item) {
+              // Update the Comments Logged checkbox
+              const checkboxValue = record.CommentsLogged ? '{"checked": "true"}' : '{"checked": "false"}';
+              
+              const query = `
+                mutation UpdateCheckbox($itemId: ID!, $boardId: ID!, $columnValues: JSON!) {
+                  change_multiple_column_values(
+                    item_id: $itemId
+                    board_id: $boardId
+                    column_values: $columnValues
+                  ) {
+                    id
+                  }
+                }
+              `;
+              
+              const columnValues = {};
+              columnValues[commentsLoggedColumn.id] = record.CommentsLogged ? {checked: true} : {checked: false};
+              
+              const variables = {
+                itemId: item.id,
+                boardId: board.id,
+                columnValues: JSON.stringify(columnValues)
+              };
+              
+              await this.makeRequest(query, variables);
+              console.log(`✓ Updated Comments Logged for Shift ID ${record['Shift ID']}: ${record.CommentsLogged}`);
+            }
+          } catch (error) {
+            console.error(`Failed to update Comments Logged for Shift ID ${record['Shift ID']}:`, error.message);
+          }
+        }
+      }
+      
+      console.log('✅ Successfully updated Comments Logged status');
+    } catch (error) {
+      console.error('❌ Failed to update Comments Logged status:', error.message);
+      throw error;
+    }
   }
 
   async syncData(data) {
@@ -598,6 +700,18 @@ class MSMMondayIntegration {
       // Get board columns
       const columns = await this.getBoardColumns(board.id);
       console.log(`MSM board has ${columns.length} columns`);
+      
+      // Check if "Comments Logged" column exists, create it if not
+      const commentsLoggedColumn = columns.find(col => col.title === 'Comments Logged');
+      if (!commentsLoggedColumn) {
+        console.log('Creating "Comments Logged" column...');
+        await this.createColumn(board.id, 'Comments Logged', 'checkbox');
+        // Refresh columns after creating new one
+        const updatedColumns = await this.getBoardColumns(board.id);
+        console.log(`MSM board now has ${updatedColumns.length} columns`);
+      } else {
+        console.log('✅ "Comments Logged" column already exists');
+      }
 
       // Delete old items (older than 8 days)
       const deletedCount = await this.deleteOldItems(board.id, 8);
@@ -610,14 +724,34 @@ class MSMMondayIntegration {
       const existingItems = await this.getBoardItems(board.id);
       const shiftIdLookup = new Map();
       
-      // Create lookup map: Shift ID -> Monday.com item ID
+      // Create lookup map: Shift ID -> { itemId, commentsLogged }
       for (const item of existingItems) {
         const shiftIdColumn = columns.find(col => col.title === 'Shift ID');
+        const commentsLoggedColumn = columns.find(col => col.title === 'Comments Logged');
+        
         if (shiftIdColumn && item.column_values) {
           const shiftIdValue = item.column_values.find(cv => cv.id === shiftIdColumn.id);
+          let commentsLogged = false;
+          
+          if (commentsLoggedColumn) {
+            const commentsLoggedValue = item.column_values.find(cv => cv.id === commentsLoggedColumn.id);
+            if (commentsLoggedValue && commentsLoggedValue.value) {
+              try {
+                const valueObj = JSON.parse(commentsLoggedValue.value);
+                commentsLogged = valueObj.checked === true;
+              } catch (e) {
+                // If parsing fails, check text value
+                commentsLogged = commentsLoggedValue.text === 'true' || commentsLoggedValue.text === 'Yes';
+              }
+            }
+          }
+          
           if (shiftIdValue && shiftIdValue.text) {
-            shiftIdLookup.set(shiftIdValue.text, item.id);
-            console.log(`Added to lookup: Shift ID "${shiftIdValue.text}" -> Item ID ${item.id}`);
+            shiftIdLookup.set(shiftIdValue.text, { 
+              itemId: item.id, 
+              commentsLogged: commentsLogged 
+            });
+            console.log(`Added to lookup: Shift ID "${shiftIdValue.text}" -> Item ID ${item.id}, Comments Logged: ${commentsLogged}`);
           } else {
             console.log(`No Shift ID found for item ${item.id}:`, shiftIdValue);
           }
@@ -654,13 +788,19 @@ class MSMMondayIntegration {
 
           if (shiftIdLookup.has(String(shiftId))) {
             // Update existing item
-            const itemId = shiftIdLookup.get(String(shiftId));
+            const itemData = shiftIdLookup.get(String(shiftId));
+            const itemId = itemData.itemId;
+            
+            // Set CommentsLogged based on whether the comment was successfully logged
+            record.CommentsLogged = record.CommentsLogged || false;
+            
             await this.updateItem(board.id, itemId, record, columns);
             updatedCount++;
             console.log(`✓ Updated item for Shift ID ${shiftId}`);
           } else {
             // Create new item
             const itemName = record.Date || 'New Shift';
+            record.CommentsLogged = record.CommentsLogged || false;
             await this.createItem(board.id, record, columns, itemName);
             createdCount++;
             console.log(`✓ Created new item for Shift ID ${shiftId}`);
@@ -675,10 +815,10 @@ class MSMMondayIntegration {
       console.log('\nChecking for orphaned records...');
       const orphanedItems = [];
       
-      for (const [shiftId, itemId] of shiftIdLookup.entries()) {
+      for (const [shiftId, itemData] of shiftIdLookup.entries()) {
         if (!processedShiftIds.has(shiftId)) {
-          orphanedItems.push({ shiftId, itemId });
-          console.log(`Found orphaned record: Shift ID ${shiftId} -> Item ID ${itemId}`);
+          orphanedItems.push({ shiftId, itemId: itemData.itemId });
+          console.log(`Found orphaned record: Shift ID ${shiftId} -> Item ID ${itemData.itemId}`);
         }
       }
 
