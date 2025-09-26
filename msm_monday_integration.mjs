@@ -31,6 +31,8 @@ const COLUMN_MAPPINGS = {
   'Adjusted Start': 'text',
   'Adjusted End': 'text',
   'Adjusted Hrs': 'text',
+  'Product': 'text',
+  'Position': 'text',
   'Exception Types': 'dropdown',
   'Shift ID': 'text'
 };

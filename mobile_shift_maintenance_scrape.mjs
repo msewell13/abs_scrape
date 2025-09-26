@@ -305,6 +305,9 @@ async function run() {
     'Adjusted Start',
     'Adjusted End',
     'Adjusted Hrs',
+    // Product and Position columns
+    'Product',
+    'Position',
     // Exception columns (add both common variants)
     'Exception Type',
     'Exception Types',
