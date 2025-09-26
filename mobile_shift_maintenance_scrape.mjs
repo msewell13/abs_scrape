@@ -636,7 +636,15 @@ async function run() {
       row['Adjusted End'] = adjustedTimes.adjustedEnd;
       
       // Use the actual DOM element to find the gear icon and get shift ID
-      const shiftId = await scrapeShiftIdFromElement(row._domElement, i + 1);
+      let shiftId = await scrapeShiftIdFromElement(row._domElement, i + 1);
+      
+      // Simple retry if Shift ID extraction failed
+      if (!shiftId) {
+        console.log(`Retrying Shift ID extraction for row ${i + 1}...`);
+        await page.waitForTimeout(1000); // Wait before retry
+        shiftId = await scrapeShiftIdFromElement(row._domElement, i + 1);
+      }
+      
       row['Shift ID'] = shiftId;
       
       // Remove the temporary properties
