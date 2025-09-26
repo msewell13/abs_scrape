@@ -552,20 +552,50 @@ async function run() {
           const nextRowClass = await nextRow.getAttribute('class') || '';
           if (nextRowClass.includes('k-detail-row')) {
             // Extract comments from the detail row
-            const comments = await page.evaluate((detailRow) => {
+            const commentResult = await page.evaluate((detailRow) => {
+              const result = {
+                comments: null,
+                debug: {
+                  detailRowHTML: detailRow.outerHTML,
+                  detailCellFound: false,
+                  detailCellText: '',
+                  allTds: []
+                }
+              };
+              
               const detailCell = detailRow.querySelector('td.k-detail-cell');
               if (detailCell) {
+                result.debug.detailCellFound = true;
                 const text = detailCell.textContent || detailCell.innerText || '';
+                result.debug.detailCellText = text;
+                
+                // Clean up the text by removing extra whitespace and newlines
+                const cleanText = text.replace(/\s+/g, ' ').trim();
+                result.debug.cleanText = cleanText;
+                
                 // Remove "Comments:" prefix and check if it's not "No records to display"
-                if (text.startsWith('Comments:')) {
-                  const commentText = text.replace(/^Comments:\s*/, '').trim();
+                if (cleanText.startsWith('Comments:')) {
+                  const commentText = cleanText.replace(/^Comments:\s*/, '').trim();
+                  result.debug.commentText = commentText;
                   if (commentText !== 'No records to display' && commentText.length > 0) {
-                    return commentText;
+                    result.comments = commentText;
                   }
                 }
+              } else {
+                // Try to find any td elements
+                const allTds = detailRow.querySelectorAll('td');
+                result.debug.allTds = Array.from(allTds).map((td, index) => ({
+                  index,
+                  className: td.className,
+                  text: td.textContent
+                }));
               }
-              return null;
+              
+              return result;
             }, nextRow);
+            
+            // console.log(`Debug for ${rowData.Customer} - ${rowData.Employee}:`, commentResult.debug);
+            const comments = commentResult.comments;
             
             rowData['Comments'] = comments;
           } else {
