@@ -577,9 +577,14 @@ async function run() {
                 if (cleanText.startsWith('Comments:')) {
                   const commentText = cleanText.replace(/^Comments:\s*/, '').trim();
                   result.debug.commentText = commentText;
-                  if (commentText !== 'No records to display' && commentText.length > 0) {
+                  // Only store comments if they're not "No records to display" and not empty
+                  if (commentText !== 'No records to display' && commentText !== 'No records to display.' && commentText.length > 0) {
                     result.comments = commentText;
+                  } else {
+                    result.comments = null; // Treat "No records to display" as no comments
                   }
+                } else {
+                  result.comments = null; // No comments found
                 }
               } else {
                 // Try to find any td elements
