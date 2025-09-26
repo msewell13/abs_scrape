@@ -598,8 +598,17 @@ class MSMMondayIntegration {
         return;
       }
       
-      // Update each record's Comments Logged status
-      for (const record of records) {
+      // Update only records that have CommentsLogged = true (just processed by Call Logger)
+      const recordsToUpdate = records.filter(record => record.CommentsLogged === true);
+      
+      if (recordsToUpdate.length === 0) {
+        console.log('No records with CommentsLogged = true to update');
+        return;
+      }
+      
+      console.log(`Updating Comments Logged status for ${recordsToUpdate.length} records that were just processed`);
+      
+      for (const record of recordsToUpdate) {
         if (record['Shift ID']) {
           try {
             // Find the item by Shift ID
@@ -613,9 +622,7 @@ class MSMMondayIntegration {
             });
             
             if (item) {
-              // Update the Comments Logged checkbox
-              const checkboxValue = record.CommentsLogged ? '{"checked": "true"}' : '{"checked": "false"}';
-              
+              // Update the Comments Logged checkbox to true
               const query = `
                 mutation UpdateCheckbox($itemId: ID!, $boardId: ID!, $columnValues: JSON!) {
                   change_multiple_column_values(
@@ -629,7 +636,7 @@ class MSMMondayIntegration {
               `;
               
               const columnValues = {};
-              columnValues[commentsLoggedColumn.id] = record.CommentsLogged ? {checked: true} : {checked: false};
+              columnValues[commentsLoggedColumn.id] = {checked: true};
               
               const variables = {
                 itemId: item.id,
@@ -638,7 +645,7 @@ class MSMMondayIntegration {
               };
               
               await this.makeRequest(query, variables);
-              console.log(`✓ Updated Comments Logged for Shift ID ${record['Shift ID']}: ${record.CommentsLogged}`);
+              console.log(`✓ Updated Comments Logged for Shift ID ${record['Shift ID']}: true`);
             }
           } catch (error) {
             console.error(`Failed to update Comments Logged for Shift ID ${record['Shift ID']}:`, error.message);
