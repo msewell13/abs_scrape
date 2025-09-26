@@ -28,10 +28,8 @@ const PASSWORD = process.env.ABS_PASS || '';
 
 // Set the month you want to scrape (defaults to current month in your local time zone)
 const today = new Date();
-const YEAR  = today.getFullYear();
-const MONTH = today.getMonth(); // 0-based
-const monthStart = new Date(YEAR, MONTH, 1);
-const monthEnd   = new Date(YEAR, MONTH + 1, 0);
+const eightDaysAgo = new Date(today);
+eightDaysAgo.setDate(today.getDate() - 8);
 
 // Utility: format as MM/DD/YYYY for Kendo DatePicker text values
 function mmddyyyy(d) {
@@ -225,16 +223,13 @@ async function run() {
   // Wait for the page to fully load and Kendo widgets to initialize
   await page.waitForTimeout(2000);
   
-  // Check if ddlExceptions exists (it might be hidden initially)
-  const exceptionsExists = await page.locator('#ddlExceptions').count() > 0;
-  if (!exceptionsExists) {
-    console.log('Warning: ddlExceptions not found, continuing without it');
-  }
+  // Skip exception dropdown check - using default selection
+  console.log('Skipping exception dropdown check - using default selection');
 
   // Use page.evaluate to interact with Kendo widgets (DatePicker & MultiSelect)
-  // We set Start/End to full current month and select ALL exceptions.
-  const startText = mmddyyyy(monthStart);
-  const endText   = mmddyyyy(monthEnd);
+  // We set Start/End to 8 days ago to today and use default exception selection.
+  const startText = mmddyyyy(eightDaysAgo);
+  const endText   = mmddyyyy(today);
 
   await page.evaluate(({ startText, endText }) => {
     // Set dates using Kendo DatePicker API if available, otherwise set input value and trigger change
@@ -264,54 +259,8 @@ async function run() {
       }
     }
 
-    // Select ALL exceptions via Kendo MultiSelect (if available)
-    const exceptionsEl = document.querySelector('#ddlExceptions');
-    if (exceptionsEl) {
-      const multi = window.$ && window.$('#ddlExceptions').data && window.$('#ddlExceptions').data('kendoMultiSelect');
-      if (multi) {
-        try {
-          // Build full list of values from data source
-          const ds = multi.dataSource;
-          const data = ds && (typeof ds.view === 'function' ? ds.view() : (typeof ds.data === 'function' ? ds.data() : [])) || [];
-          const valueField = multi.options && multi.options.dataValueField;
-          const textField = multi.options && multi.options.dataTextField;
-          const allValues = data.map(item => {
-            if (valueField && item && Object.prototype.hasOwnProperty.call(item, valueField)) return item[valueField];
-            if (item && (item.value != null)) return item.value;
-            if (item && (item.id != null)) return item.id;
-            // last resort: use text as value
-            if (textField && item && Object.prototype.hasOwnProperty.call(item, textField)) return item[textField];
-            return String(item);
-          });
-
-          const current = Array.isArray(multi.value?.()) ? multi.value() : [];
-          if (current.length !== allValues.length) {
-            multi.value(allValues);
-            multi.trigger('change');
-          }
-        } catch (e) {
-          // Fallback: try select() API if available
-          if (typeof multi.select === 'function') {
-            const ds = multi.dataSource;
-            const data = ds && (typeof ds.view === 'function' ? ds.view() : (typeof ds.data === 'function' ? ds.data() : [])) || [];
-            const allIdx = Array.from({ length: data.length }, (_, i) => i);
-            multi.select(allIdx);
-            multi.trigger('change');
-          }
-        }
-      } else {
-        // Fallback: if it's a plain <select multiple>, select all options
-        const sel = document.querySelector('#ddlExceptions');
-        if (sel && sel.options && sel.options.length > 0) {
-          for (let i = 0; i < sel.options.length; i++) {
-            sel.options[i].selected = true;
-          }
-          sel.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-      }
-    } else {
-      console.log('ddlExceptions element not found, skipping exception selection');
-    }
+    // Skip exception selection - use default selection
+    console.log('Skipping exception dropdown manipulation - using default selection');
   }, { startText, endText });
 
   // Click search
