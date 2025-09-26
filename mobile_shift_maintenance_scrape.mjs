@@ -121,7 +121,7 @@ async function login(page, user, pass) {
 
 async function run() {
   const browser = await chromium.launch({ 
-    headless: true, 
+    headless: false, // Run in visible mode for debugging 
     args: ['--no-sandbox', '--disable-dev-shm-usage'] 
   });
   let context;
@@ -449,7 +449,6 @@ async function run() {
 
       // Click the gear icon using force to bypass overlay issues
       await gearIcon.click({ force: true });
-      await page.waitForTimeout(500); // Wait for menu to appear
 
       // Look for "Show Shift" option in the menu
       const showShiftOption = page.locator('text=Show Shift').first();
@@ -460,7 +459,6 @@ async function run() {
 
       // Click "Show Shift"
       await showShiftOption.click({ force: true });
-      await page.waitForTimeout(1000); // Wait for popup to appear
 
       // Extract shift number from div with id "divShiftNumber"
       const shiftNumber = await page.evaluate(() => {
@@ -485,8 +483,6 @@ async function run() {
         const overlays = document.querySelectorAll('.k-overlay');
         overlays.forEach(overlay => overlay.remove());
       });
-      
-      await page.waitForTimeout(500); // Wait for popup to close
 
       console.log(`Scraped shift ID for row ${rowIndex + 1}: ${shiftNumber}`);
       return shiftNumber;
@@ -679,8 +675,6 @@ async function run() {
           icon.dispatchEvent(clickEvent);
         }
       });
-      
-      await page.waitForTimeout(500); // Wait for menu to appear
 
       // Look for the "Show Shift" button using the specific selector
       const showShiftButton = page.locator('#btnShowShift');
@@ -690,9 +684,9 @@ async function run() {
       }
       await showShiftButton.click({ force: true });
       console.log(`Clicked "Show Shift" button for row ${rowNumber}`);
-      // Wait for network requests to complete after clicking "Show Shift"
-      await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(3000); // Additional wait for popup content to load
+      
+      // Wait a moment for the popup content to load
+      await page.waitForTimeout(200);
       
       // Debug: Check what elements are available after clicking
       const debugInfo = await page.evaluate(() => {
@@ -721,10 +715,9 @@ async function run() {
       // Approach 1: Look for the divViewShiftPopup (without data-role requirement)
       try {
         // Wait for the popup to appear (even if hidden)
-        await page.waitForSelector('#divViewShiftPopup', { timeout: 5000, state: 'attached' });
+        await page.waitForSelector('#divViewShiftPopup', { timeout: 1000, state: 'attached' });
         
         // Wait for the popup content to load
-        await page.waitForTimeout(3000);
         
         // Look for shift ID in the popup
         shiftNumber = await page.evaluate(() => {
@@ -742,12 +735,13 @@ async function run() {
             if (shiftDiv) {
               const text = shiftDiv.textContent || shiftDiv.innerText || '';
               console.log('Found divShiftNumber with text:', text);
+              console.log('divShiftNumber innerHTML:', shiftDiv.innerHTML);
               
               // Extract the 8-digit number from "Shift #: 97533258"
               const shiftMatch = text.match(/Shift #:\s*(\d{8})/);
               if (shiftMatch) {
                 const number = parseInt(shiftMatch[1], 10);
-                console.log('Extracted shift number:', number);
+                console.log('Extracted shift number from regex:', number);
                 return number;
               }
               
@@ -757,13 +751,27 @@ async function run() {
                 console.log('Found 8-digit number in divShiftNumber:', eightDigitMatch[0]);
                 return parseInt(eightDigitMatch[0], 10);
               }
+              
+              // Additional fallback: check if text contains "Shift #:" and extract number
+              if (text.includes('Shift #:')) {
+                const parts = text.split('Shift #:');
+                if (parts.length > 1) {
+                  const numberPart = parts[1].trim();
+                  const numberMatch = numberPart.match(/\d{8}/);
+                  if (numberMatch) {
+                    const number = parseInt(numberMatch[0], 10);
+                    console.log('Extracted shift number from split method:', number);
+                    return number;
+                  }
+                }
+              }
             }
             
-            // Look for any 8-digit number in the popup content
+            // Always search the entire popup content for 8-digit numbers as fallback
+            console.log('Searching entire popup for 8-digit numbers...');
             const popupText = popup.textContent || popup.innerText || '';
             console.log('Popup text content length:', popupText.length);
             console.log('Popup text content preview:', popupText.substring(0, 500));
-            
             const eightDigitMatch = popupText.match(/\b\d{8}\b/);
             if (eightDigitMatch) {
               console.log('Found 8-digit number in popup:', eightDigitMatch[0]);
@@ -968,8 +976,6 @@ async function run() {
         const overlays = document.querySelectorAll('.k-overlay');
         overlays.forEach(overlay => overlay.remove());
       });
-      
-      await page.waitForTimeout(500); // Wait for popup to close
 
       console.log(`Scraped shift ID for row ${rowNumber}: ${shiftNumber}`);
       return shiftNumber;
