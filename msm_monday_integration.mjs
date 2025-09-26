@@ -31,7 +31,8 @@ const COLUMN_MAPPINGS = {
   'Adjusted Start': 'text',
   'Adjusted End': 'text',
   'Adjusted Hrs': 'text',
-  'Exception Types': 'dropdown'
+  'Exception Types': 'dropdown',
+  'Shift ID': 'text'
 };
 
 class MSMMondayIntegration {
@@ -280,6 +281,9 @@ class MSMMondayIntegration {
               // Handle special column types
               if (column.type === 'date') {
                 columnValue = value;
+              } else if (column.type === 'text' && key === 'Shift ID') {
+                // Convert Shift ID to text format for Monday.com
+                columnValue = value ? String(value) : null;
               } else if (column.type === 'dropdown' && key === 'Exception Types') {
                 // Skip Exception Types for now - we'll update it separately
                 continue;
@@ -350,6 +354,9 @@ class MSMMondayIntegration {
         if (column.type === 'date') {
           // Convert date to Monday.com format (YYYY-MM-DD)
           columnValue = value;
+        } else if (column.type === 'text' && key === 'Shift ID') {
+          // Convert Shift ID to text format for Monday.com
+          columnValue = value ? String(value) : null;
         } else if (column.type === 'dropdown' && key === 'Exception Types') {
           // Parse multiple exceptions for dropdown field
           const exceptions = this.parseExceptionTypes(value);

@@ -55,7 +55,7 @@ This installs `playwright` and `dotenv` used by the scripts.
 
 ---
 
-## Set credentials with .env (recommended)
+## Set credentials with .env
 
 Create a file named `.env` in the project root with:
 
@@ -65,7 +65,7 @@ ABS_USER=your_username
 ABS_PASS=your_password
 ```
 
-### Monday.com Integration (for schedule scraper)
+### Monday.com Integration
 ```env
 MONDAY_API_TOKEN=your_monday_api_token
 MONDAY_SCHEDULE_BOARD_ID=your_schedule_board_id
@@ -76,7 +76,7 @@ MONDAY_MSM_BOARD_ID=your_msm_board_id
 
 Notes:
 - Keep `.env` private (do not commit it).
-- Get your Monday.com API token from: Account Settings → API → Generate new token
+- Get your Monday.com API token from: Your profile in top right corner and then Developers
 - Board ID can be found in the Monday.com board URL
 
 ---
