@@ -365,7 +365,7 @@ class MSMMondayIntegration {
           
           for (const [key, value] of Object.entries(record)) {
             const column = columns.find(col => col.title === key);
-            if (column && value !== null) {
+            if (column && (value !== null || key === 'Comments')) {
               let columnValue = value;
               
               // Handle special column types
@@ -437,7 +437,7 @@ class MSMMondayIntegration {
     
     for (const [key, value] of Object.entries(itemData)) {
       const column = columns.find(col => col.title === key);
-      if (column && value !== null) {
+      if (column && (value !== null || key === 'Comments')) {
         let columnValue = value;
         
         // Handle special column types
@@ -485,7 +485,7 @@ class MSMMondayIntegration {
     
     for (const [key, value] of Object.entries(itemData)) {
       const column = columns.find(col => col.title === key);
-      if (column && value !== null) {
+      if (column && (value !== null || key === 'Comments')) {
         let columnValue = value;
         
         // Handle special column types
