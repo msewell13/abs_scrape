@@ -284,7 +284,7 @@ class MSMMondayIntegration {
       throw new Error(`Monday.com API Error: ${JSON.stringify(response.errors)}`);
     }
     
-    return response.data.delete_item;
+    return response.data?.delete_item;
   }
 
   async deleteAllItems(boardId) {
@@ -618,6 +618,9 @@ class MSMMondayIntegration {
 
       console.log(`Processing ${records.length} scraped records...`);
 
+      // Track which Shift IDs we've processed from the scraped data
+      const processedShiftIds = new Set();
+
       for (const record of records) {
         try {
           const shiftId = record['Shift ID'];
@@ -629,6 +632,9 @@ class MSMMondayIntegration {
 
           console.log(`Processing record with Shift ID: "${shiftId}" (type: ${typeof shiftId})`);
           console.log(`Looking for Shift ID in lookup map: ${shiftIdLookup.has(String(shiftId))}`);
+
+          // Track this Shift ID as processed
+          processedShiftIds.add(String(shiftId));
 
           if (shiftIdLookup.has(String(shiftId))) {
             // Update existing item
@@ -649,10 +655,41 @@ class MSMMondayIntegration {
         }
       }
 
+      // Delete orphaned records (in Monday but not in scraped data)
+      console.log('\nChecking for orphaned records...');
+      const orphanedItems = [];
+      
+      for (const [shiftId, itemId] of shiftIdLookup.entries()) {
+        if (!processedShiftIds.has(shiftId)) {
+          orphanedItems.push({ shiftId, itemId });
+          console.log(`Found orphaned record: Shift ID ${shiftId} -> Item ID ${itemId}`);
+        }
+      }
+
+      if (orphanedItems.length > 0) {
+        console.log(`Deleting ${orphanedItems.length} orphaned records...`);
+        let deletedCount = 0;
+        
+        for (const { shiftId, itemId } of orphanedItems) {
+          try {
+            await this.deleteItem(itemId);
+            deletedCount++;
+            console.log(`Deleted orphaned record: Shift ID ${shiftId}`);
+          } catch (error) {
+            console.error(`Failed to delete orphaned record ${shiftId}:`, error.message);
+          }
+        }
+        
+        console.log(`Deleted ${deletedCount} orphaned records`);
+      } else {
+        console.log('No orphaned records found');
+      }
+
       console.log(`\nMSM Sync completed:`);
       console.log(`- Items updated: ${updatedCount}`);
       console.log(`- Items created: ${createdCount}`);
       console.log(`- Items failed: ${failedCount}`);
+      console.log(`- Orphaned records deleted: ${orphanedItems.length}`);
       console.log(`- Total processed: ${records.length}`);
       
       if (updatedCount > 0 || createdCount > 0) {
