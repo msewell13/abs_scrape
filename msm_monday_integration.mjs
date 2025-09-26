@@ -200,6 +200,93 @@ class MSMMondayIntegration {
     return allItems;
   }
 
+  async deleteOldItems(boardId, daysOld = 8) {
+    console.log(`Deleting MSM items older than ${daysOld} days...`);
+    
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+    console.log(`Cutoff date: ${cutoffDate.toISOString().split('T')[0]}`);
+    
+    // Get all items
+    const allItems = await this.getBoardItems(boardId);
+    const itemsToDelete = [];
+    
+    // Find items older than cutoff date
+    for (const item of allItems) {
+      const dateColumn = item.column_values?.find(cv => cv.title === 'Date');
+      if (dateColumn && dateColumn.text) {
+        try {
+          // Parse the date (assuming MM/DD/YYYY format)
+          const [month, day, year] = dateColumn.text.split('/');
+          const itemDate = new Date(year, month - 1, day);
+          
+          if (itemDate < cutoffDate) {
+            itemsToDelete.push(item.id);
+            console.log(`Marking for deletion: Item ${item.id} with date ${dateColumn.text}`);
+          }
+        } catch (error) {
+          console.log(`Could not parse date for item ${item.id}: ${dateColumn.text}`);
+        }
+      }
+    }
+    
+    if (itemsToDelete.length === 0) {
+      console.log('No old items found to delete');
+      return 0;
+    }
+    
+    console.log(`Found ${itemsToDelete.length} old items to delete`);
+    
+    // Delete items in batches
+    let deletedCount = 0;
+    const batchSize = 50;
+    
+    for (let i = 0; i < itemsToDelete.length; i += batchSize) {
+      const batch = itemsToDelete.slice(i, i + batchSize);
+      const batchNumber = Math.floor(i / batchSize) + 1;
+      
+      try {
+        console.log(`Deleting batch ${batchNumber} (${batch.length} items)...`);
+        
+        // Delete items one by one (Monday.com doesn't support batch deletion)
+        for (const itemId of batch) {
+          await this.deleteItem(itemId);
+          deletedCount++;
+        }
+        
+        console.log(`Deleted batch ${batchNumber}: ${batch.length} items`);
+        
+        // Small delay between batches
+        if (i + batchSize < itemsToDelete.length) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      } catch (error) {
+        console.error(`Failed to delete batch ${batchNumber}:`, error.message);
+      }
+    }
+    
+    console.log(`Deleted ${deletedCount} old MSM items`);
+    return deletedCount;
+  }
+
+  async deleteItem(itemId) {
+    const query = `
+      mutation {
+        delete_item (item_id: ${itemId}) {
+          id
+        }
+      }
+    `;
+
+    const response = await this.makeRequest(query);
+    
+    if (response.errors && response.errors.length > 0) {
+      throw new Error(`Monday.com API Error: ${JSON.stringify(response.errors)}`);
+    }
+    
+    return response.data.delete_item;
+  }
+
   async deleteAllItems(boardId) {
     console.log('Clearing remaining old MSM items...');
     
@@ -494,6 +581,12 @@ class MSMMondayIntegration {
       // Get board columns
       const columns = await this.getBoardColumns(board.id);
       console.log(`MSM board has ${columns.length} columns`);
+
+      // Delete old items (older than 8 days)
+      const deletedCount = await this.deleteOldItems(board.id, 8);
+      if (deletedCount > 0) {
+        console.log(`Cleaned up ${deletedCount} old items from MSM board`);
+      }
 
       // Fetch existing items and create Shift ID lookup map
       console.log('Fetching existing MSM items...');
