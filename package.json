@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "setup-boards": "node setup_monday_boards.mjs",
     "scrape-msm": "node mobile_shift_maintenance_scrape.mjs",
     "scrape-msm-monday": "node mobile_shift_maintenance_scrape.mjs",
     "sync-msm-monday": "node msm_monday_integration.mjs",

@@ -146,7 +146,31 @@ Outputs:
 
 ### Prerequisites for Monday.com Integration
 
-#### For MSM Scraper (MSM Shift Data)
+#### Automated Monday.com Board Setup
+
+**🚀 Quick Setup (Recommended):**
+
+1. **Run the automated board setup:**
+   ```bash
+   npm run setup-boards
+   ```
+   
+   This will automatically create all required boards:
+   - **Employees** - Employee directory for board-relations
+   - **MSM Shift Data** - Mobile Shift Maintenance data
+   - **ABS Shift Data** - Schedule data
+   
+   The script will also update your `.env` file with the new board IDs.
+
+2. **Add employees to the Employees board:**
+   - Go to your Monday.com workspace
+   - Open the "Employees" board
+   - Add your employees with their names and details
+   - The scrapers will automatically link to these employees
+
+**📋 Manual Setup (Alternative):**
+
+If you prefer to create boards manually or need to recreate them:
 
 1. **Create the MSM Monday.com board manually:**
    - In Monday.com, go to your workspace
@@ -429,7 +453,18 @@ MONDAY_API_TOKEN=your_monday_api_token
 MONDAY_MSM_BOARD_ID=your_board_id
 ```
 
-#### 4. Make Scripts Executable
+#### 4. Set Up Monday.com Boards (Optional)
+
+If you want to use Monday.com integration, set up the boards automatically:
+
+```bash
+# Run the automated board setup
+npm run setup-boards
+```
+
+This will create all required boards and update your `.env` file with the board IDs.
+
+#### 5. Make Scripts Executable
 
 ```bash
 # Make the cron scheduler script executable
@@ -439,7 +474,7 @@ chmod +x cron_scheduler_mac.sh
 ./cron_scheduler_mac.sh msm
 ```
 
-#### 5. Install Cron Job
+#### 6. Install Cron Job
 
 ```bash
 # Install the cron job (runs every 15 minutes)
