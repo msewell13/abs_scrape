@@ -119,7 +119,7 @@ async function login(page, user, pass) {
 
 async function run() {
   const browser = await chromium.launch({ 
-    headless: false, // Run in visible mode for debugging 
+    headless: process.env.DEBUG !== 'True', // Use DEBUG env var to control headless mode 
     args: ['--no-sandbox', '--disable-dev-shm-usage'] 
   });
   let context;
@@ -1096,22 +1096,22 @@ async function run() {
   
   console.log(`\nFiltering complete: ${totalWithExceptions} records with exceptions out of ${totalProcessed} total records`);
 
-  // Format exception data for local files (with newlines for readability)
+  // Format exception data for local files (with commas and spaces for readability)
   const formattedRows = allRows.map(obj => {
     const formatted = { ...obj };
     if (formatted['Exception Types']) {
-      // Split by common exception patterns and join with newlines for local files
+      // Split by common exception patterns and join with commas and spaces for local files
       const exceptions = formatted['Exception Types']
-        .replace(/([a-z])([A-Z])/g, '$1\n$2') // Add newline before capital letters after lowercase
-        .replace(/(Shift)([A-Z])/g, '$1\n$2') // Add newline after "Shift" before capital letters
-        .replace(/(Threshold)([A-Z])/g, '$1\n$2') // Add newline after "Threshold" before capital letters
-        .replace(/(Submitted)([A-Z])/g, '$1\n$2') // Add newline after "Submitted" before capital letters
-        .replace(/(Denied)([A-Z])/g, '$1\n$2') // Add newline after "Denied" before capital letters
-        .replace(/(Time)([A-Z])/g, '$1\n$2') // Add newline after "Time" before capital letters
-        .split('\n')
+        .replace(/([a-z])([A-Z])/g, '$1, $2') // Add comma and space before capital letters after lowercase
+        .replace(/(Shift)([A-Z])/g, '$1, $2') // Add comma and space after "Shift" before capital letters
+        .replace(/(Threshold)([A-Z])/g, '$1, $2') // Add comma and space after "Threshold" before capital letters
+        .replace(/(Submitted)([A-Z])/g, '$1, $2') // Add comma and space after "Submitted" before capital letters
+        .replace(/(Denied)([A-Z])/g, '$1, $2') // Add comma and space after "Denied" before capital letters
+        .replace(/(Time)([A-Z])/g, '$1, $2') // Add comma and space after "Time" before capital letters
+        .split(',')
         .map(line => line.trim())
         .filter(line => line.length > 0)
-        .join('\n');
+        .join(', ');
       formatted['Exception Types'] = exceptions;
     }
     return formatted;
@@ -1178,6 +1178,12 @@ async function run() {
 // Function to log new comments using Call Logger
 async function logNewComments(records, page) {
   try {
+    // Check if call logger notes should be logged
+    if (process.env.CALL_LOGGER_NOTES !== 'True') {
+      console.log('CALL_LOGGER_NOTES is disabled, skipping comment logging');
+      return;
+    }
+    
     // First, fetch existing Monday.com data to check Comments Logged status
     console.log('Fetching existing Monday.com data to check Comments Logged status...');
     const msmIntegration = new MSMMondayIntegration();

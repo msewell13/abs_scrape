@@ -452,7 +452,10 @@ async function switchToMonth(page) {
     process.exit(1);
   }
 
-  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox','--disable-dev-shm-usage'] });
+  const browser = await chromium.launch({ 
+    headless: process.env.DEBUG !== 'True', // Use DEBUG env var to control headless mode
+    args: ['--no-sandbox','--disable-dev-shm-usage'] 
+  });
   const context = await browser.newContext({
     locale: 'en-US',
     timezoneId: 'America/Chicago',

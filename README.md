@@ -94,6 +94,13 @@ ABS_PASS=your_password
 MONDAY_API_TOKEN=your_monday_api_token
 MONDAY_SCHEDULE_BOARD_ID=your_schedule_board_id
 MONDAY_MSM_BOARD_ID=your_msm_board_id
+EMPLOYEE_BOARD_ID=18076293881
+```
+
+### Debug and Feature Flags
+```env
+DEBUG=True
+CALL_LOGGER_NOTES=True
 ```
 
 ---
@@ -102,6 +109,18 @@ Notes:
 - Keep `.env` private (do not commit it).
 - Get your Monday.com API token from: Your profile in top right corner and then Developers
 - Board ID can be found in the Monday.com board URL
+
+#### Environment Variable Descriptions:
+
+**Monday.com Configuration:**
+- `MONDAY_API_TOKEN`: Your Monday.com API token
+- `MONDAY_SCHEDULE_BOARD_ID`: Board ID for the schedule scraper
+- `MONDAY_MSM_BOARD_ID`: Board ID for the mobile shift maintenance scraper
+- `EMPLOYEE_BOARD_ID`: Board ID for employee lookup (used for board-relation columns)
+
+**Debug and Feature Flags:**
+- `DEBUG`: Set to `True` to run scrapers in visible browser mode, `False` for headless mode
+- `CALL_LOGGER_NOTES`: Set to `True` to log employee comments in call logger, `False` to skip this step
 
 ---
 

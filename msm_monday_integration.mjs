@@ -35,7 +35,7 @@ const COLUMN_MAPPINGS = {
   'Position': 'text',
   'Comments': 'text',
   'Comments Logged': 'checkbox',
-  'Exception Types': 'dropdown',
+  'Exception Types': 'long_text',
   'Shift ID': 'text'
 };
 
@@ -93,6 +93,12 @@ class MSMMondayIntegration {
       // Split by newlines if formatted
       exceptions = exceptionString
         .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+    } else if (exceptionString.includes(',')) {
+      // Split by commas if already comma-separated
+      exceptions = exceptionString
+        .split(',')
         .map(line => line.trim())
         .filter(line => line.length > 0);
     } else {
@@ -266,6 +272,7 @@ class MSMMondayIntegration {
     try {
       const employeeItems = await this.getEmployeeBoardItems(employeeBoardId);
       
+      
       // Try exact match first
       let employee = employeeItems.find(item => item.name === employeeName);
       if (employee) {
@@ -308,12 +315,12 @@ class MSMMondayIntegration {
         }
       }
       
-      // Fallback to hardcoded employee board ID
-      return '18076293881';
+      // Fallback to environment variable employee board ID
+      return process.env.EMPLOYEE_BOARD_ID || '18076293881';
     } catch (error) {
       console.error('Error parsing employee column settings:', error.message);
-      // Fallback to hardcoded employee board ID
-      return '18076293881';
+      // Fallback to environment variable employee board ID
+      return process.env.EMPLOYEE_BOARD_ID || '18076293881';
     }
   }
 
@@ -549,6 +556,7 @@ class MSMMondayIntegration {
             if (column && (value !== null || key === 'Comments' || key === 'Comments Logged')) {
               let columnValue = value;
               
+              
               // Handle special column types
               if (column.type === 'date') {
                 columnValue = value;
@@ -558,9 +566,10 @@ class MSMMondayIntegration {
               } else if (column.type === 'checkbox' && key === 'Comments Logged') {
                 // Format checkbox value for Monday.com
                 columnValue = value ? '{"checked": "true"}' : '{"checked": "false"}';
-              } else if (column.type === 'dropdown' && key === 'Exception Types') {
-                // Skip Exception Types for now - we'll update it separately
-                continue;
+              } else if ((column.type === 'text' || column.type === 'long_text') && key === 'Exception Types') {
+                // Parse multiple exceptions for text field
+                const exceptions = this.parseExceptionTypes(value);
+                columnValue = exceptions.join(', ');
               } else if (column.type === 'board_relation' && key === 'Employee') {
                 // Skip board_relation columns during initial creation - we'll update them separately
                 console.log(`Skipping Employee board-relation column during creation for "${value}"`);
@@ -593,10 +602,7 @@ class MSMMondayIntegration {
           
           const result = await this.makeRequest(query, variables);
           
-          // Update Exception Types field separately with create_labels_if_missing
-          if (record['Exception Types']) {
-            await this.updateExceptionTypes(result.create_item.id, record['Exception Types'], boardId, columns);
-          }
+          // Exception Types are now handled directly in the main column processing
           
           // Update Employee board-relation field separately
           if (record['Employee']) {
@@ -649,10 +655,10 @@ class MSMMondayIntegration {
         } else if (column.type === 'text' && key === 'Shift ID') {
           // Convert Shift ID to text format for Monday.com
           columnValue = value ? String(value) : null;
-        } else if (column.type === 'dropdown' && key === 'Exception Types') {
-          // Parse multiple exceptions for dropdown field
+        } else if ((column.type === 'text' || column.type === 'long_text') && key === 'Exception Types') {
+          // Parse multiple exceptions for text field
           const exceptions = this.parseExceptionTypes(value);
-          columnValue = exceptions.join(',');
+          columnValue = exceptions.join(', ');
         } else if (column.type === 'board_relation' && key === 'Employee') {
           // Skip board_relation columns during initial creation - we'll update them separately
           console.log(`Skipping Employee board-relation column during creation for "${value}"`);
@@ -711,10 +717,10 @@ class MSMMondayIntegration {
         } else if (column.type === 'checkbox' && key === 'Comments Logged') {
           // Format checkbox value for Monday.com
           columnValue = value ? '{"checked": "true"}' : '{"checked": "false"}';
-        } else if (column.type === 'dropdown' && key === 'Exception Types') {
-          // Parse multiple exceptions for dropdown field
+        } else if ((column.type === 'text' || column.type === 'long_text') && key === 'Exception Types') {
+          // Parse multiple exceptions for text field
           const exceptions = this.parseExceptionTypes(value);
-          columnValue = exceptions.join(',');
+          columnValue = exceptions.join(', ');
         } else if (column.type === 'board_relation' && key === 'Employee') {
           // Skip board_relation columns during initial creation - we'll update them separately
           console.log(`Skipping Employee board-relation column during creation for "${value}"`);
@@ -746,13 +752,7 @@ class MSMMondayIntegration {
     
     const data = await this.makeRequest(query, variables);
     
-    // Update Exception Types separately if needed (for dropdown with create_labels_if_missing)
-    if (itemData['Exception Types']) {
-      const exceptionTypesColumn = columns.find(col => col.title === 'Exception Types');
-      if (exceptionTypesColumn) {
-        await this.updateExceptionTypes(itemId, itemData['Exception Types'], boardId, columns);
-      }
-    }
+    // Exception Types are now handled directly in the main column processing
     
     // Update Employee board-relation separately if needed
     if (itemData['Employee']) {
@@ -977,6 +977,8 @@ class MSMMondayIntegration {
       for (let i = 0; i < records.length; i++) {
         const record = records[i];
         console.log(`Processing record ${i + 1}/${records.length}...`);
+        
+        
         try {
           const shiftId = record['Shift ID'];
           if (!shiftId) {
