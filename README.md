@@ -14,27 +14,70 @@ Get the ABS scrapers up and running in just a few minutes! This guide will walk 
 
 ### 🎯 Automated Installation (Recommended)
 
-**For the easiest setup, use our automated installer:**
+**For the easiest setup, use our universal installer:**
 
-1. **Download and run the installer:**
-   - **Windows:** Download `install.bat` and double-click it
-   - **Mac/Linux:** Download `install.sh` and run: `bash install.sh`
-   - **Any platform:** Run `node install.mjs` (if you have Node.js)
+#### **📥 Step 1: Download the Installer**
 
-2. **Follow the prompts** - the installer will:
-   - Detect your operating system
-   - Install Node.js and Git if needed
-   - Download the latest code
-   - Install all dependencies
-   - Ask for your credentials
-   - Set up Monday.com boards automatically
-   - Test the installation
+**Download the installer script:**
+
+**Option 1: Direct Download**
+- **Click:** [install.js](https://raw.githubusercontent.com/msewell13/abs_scrape/main/install.js)
+- **Right-click** → **Save As** → Save as `install.js`
+
+**Option 2: Command Line**
+```bash
+# Using curl
+curl -O https://raw.githubusercontent.com/msewell13/abs_scrape/main/install.js
+
+# Using wget
+wget https://raw.githubusercontent.com/msewell13/abs_scrape/main/install.js
+```
+
+> **Note:** Replace `your-username` with your actual GitHub username in the download link above.
+
+#### **📋 Step 2: Install Node.js (Required)**
+
+**Before running the installer, you need Node.js installed:**
+
+1. **Go to [nodejs.org](https://nodejs.org/)**
+2. **Download the LTS version** (recommended)
+3. **Run the installer** and follow the instructions
+4. **Restart your terminal/command prompt** after installation
+
+**Verify Node.js is installed:**
+```bash
+node --version
+npm --version
+```
+
+#### **🚀 Step 3: Run the Installer**
+
+**Once Node.js is installed, run the installer:**
+
+```bash
+# Navigate to where you saved install.js
+cd /path/to/installer
+
+# Run the installer
+node install.js
+
+# Or with options
+node install.js --test    # Test mode (check requirements only)
+node install.js --help    # Show help and usage information
+```
+
+#### **📋 What the Installer Does**
+
+The installer will:
+- ✅ Detect your operating system automatically
+- ✅ Install Git if needed
+- ✅ Download the latest code
+- ✅ Install all dependencies
+- ✅ Ask for your credentials
+- ✅ Set up Monday.com boards automatically
+- ✅ Test the installation
 
 **That's it!** The installer handles everything automatically.
-
-**Installer Options:**
-- `node install.mjs --test` - Test mode (check requirements only, skip credentials)
-- `node install.mjs --help` - Show help and usage information
 
 ---
 
