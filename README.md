@@ -81,7 +81,12 @@ The installer will:
 
 ## Set credentials with .env
 
-Create a file named `.env` in the project root with:
+1. **Copy the sample file:**
+   ```bash
+   cp .env.sample .env
+   ```
+
+2. **Edit the `.env` file** with your actual values:
 
 ### ABS Portal Credentials
 ```env
@@ -401,14 +406,17 @@ npx playwright install chromium
 
 #### 3. Configure Environment Variables
 
-Create a `.env` file in the project root:
+Copy the sample environment file and edit it:
 
 ```bash
-# Create .env file
+# Copy sample file
+cp .env.sample .env
+
+# Edit with your values
 nano .env
 ```
 
-Add the following content (replace with your actual values):
+The `.env.sample` file contains all required variables with placeholders. Replace the placeholder values with your actual credentials:
 
 ```env
 # ABS Login Credentials
