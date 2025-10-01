@@ -1,13 +1,11 @@
 #!/bin/bash
 
-# ABS Scraper Cron Scheduler - macOS/Linux Version
+# ABS Mobile Shift Maintenance Scraper Cron Scheduler - macOS/Linux Version
 # 
 # This script provides cron job functionality for macOS and Linux systems
 # 
 # Usage:
-# - ./cron_scheduler_mac.sh schedule    # Run schedule scraper
 # - ./cron_scheduler_mac.sh msm         # Run MSM scraper
-# - ./cron_scheduler_mac.sh both        # Run both scrapers
 # - ./cron_scheduler_mac.sh install     # Install cron jobs
 
 # Configuration
@@ -141,16 +139,6 @@ run_script() {
     return 1
 }
 
-# Run schedule scraper
-run_schedule() {
-    log "INFO" "=== Running Schedule Scraper ==="
-    
-    # Ensure computer is awake before running
-    ensure_computer_is_awake
-    
-    run_script "schedule_scrape.mjs"
-}
-
 # Run MSM scraper
 run_msm() {
     log "INFO" "=== Running MSM Scraper ==="
@@ -161,30 +149,6 @@ run_msm() {
     run_script "mobile_shift_maintenance_scrape.mjs"
 }
 
-# Run both scrapers
-run_both() {
-    log "INFO" "=== Running Both Scrapers ==="
-    
-    # Ensure computer is awake before running
-    ensure_computer_is_awake
-    
-    local schedule_success=0
-    local msm_success=0
-    
-    if run_schedule; then
-        schedule_success=1
-    fi
-    
-    if run_msm; then
-        msm_success=1
-    fi
-    
-    local total_success=$((schedule_success + msm_success))
-    log "INFO" "Completed $total_success/2 scrapers successfully"
-    
-    return $((2 - total_success))
-}
-
 # Install cron jobs
 install_cron() {
     log "INFO" "=== Installing Cron Jobs ==="
@@ -193,12 +157,12 @@ install_cron() {
     
     # Create cron entries
     local cron_entries=(
-        "# ABS Both Scrapers - Daily at midnight"
-        "0 0 * * * cd $SCRIPT_DIR && $cron_script both >> $LOG_DIR/cron-both.log 2>&1"
+        "# ABS Mobile Shift Maintenance Scraper - Every 15 minutes"
+        "*/15 * * * * cd $SCRIPT_DIR && $cron_script msm >> $LOG_DIR/cron-msm.log 2>&1"
     )
     
     # Check if cron jobs already exist
-    if crontab -l 2>/dev/null | grep -q "ABS Both Scrapers"; then
+    if crontab -l 2>/dev/null | grep -q "ABS Mobile Shift Maintenance Scraper"; then
         log "WARN" "Cron jobs already exist. Use 'crontab -e' to edit manually."
         return 1
     fi
@@ -211,7 +175,7 @@ install_cron() {
     
     if [ $? -eq 0 ]; then
         log "INFO" "✅ Cron job installed successfully"
-        log "INFO" "Both Scrapers: Daily at midnight (00:00)"
+        log "INFO" "MSM Scraper: Every 15 minutes"
         log "INFO" "Logs: $LOG_DIR/"
     else
         log "ERROR" "❌ Failed to install cron job"
@@ -238,20 +202,18 @@ cleanup_logs() {
 
 # Show usage
 show_usage() {
-    echo "ABS Scraper Cron Scheduler - macOS/Linux"
+    echo "ABS Mobile Shift Maintenance Scraper Cron Scheduler - macOS/Linux"
     echo ""
     echo "Usage:"
-    echo "  $0 schedule    # Run schedule scraper"
     echo "  $0 msm         # Run MSM scraper"
-    echo "  $0 both        # Run both scrapers"
     echo "  $0 install     # Install cron jobs"
     echo "  $0 uninstall   # Remove cron jobs"
     echo ""
     echo "Examples:"
-    echo "  # Run schedule scraper now"
-    echo "  $0 schedule"
+    echo "  # Run MSM scraper now"
+    echo "  $0 msm"
     echo ""
-    echo "  # Install cron jobs"
+    echo "  # Install cron jobs (runs every 15 minutes)"
     echo "  $0 install"
     echo ""
     echo "  # View cron jobs"
@@ -263,7 +225,7 @@ uninstall_cron() {
     log "INFO" "=== Uninstalling Cron Jobs ==="
     
     # Remove ABS-related cron jobs
-    crontab -l 2>/dev/null | grep -v "ABS" | crontab -
+    crontab -l 2>/dev/null | grep -v "ABS Mobile Shift Maintenance Scraper" | crontab -
     
     if [ $? -eq 0 ]; then
         log "INFO" "✅ Cron jobs removed successfully"
@@ -278,14 +240,8 @@ main() {
     local command="$1"
     
     case "$command" in
-        "schedule")
-            run_schedule
-            ;;
         "msm")
             run_msm
-            ;;
-        "both")
-            run_both
             ;;
         "install")
             install_cron

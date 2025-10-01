@@ -5,20 +5,14 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "scrape": "node schedule_scrape.mjs",
-    "scrape-monday": "node schedule_scrape.mjs",
     "scrape-msm": "node mobile_shift_maintenance_scrape.mjs",
     "scrape-msm-monday": "node mobile_shift_maintenance_scrape.mjs",
-    "sync-monday": "node monday_integration.mjs",
     "sync-msm-monday": "node msm_monday_integration.mjs",
-    "cron-schedule": "node cron_scheduler.mjs --schedule-schedule",
     "cron-msm": "node cron_scheduler.mjs --schedule-msm",
-    "cron-both": "node cron_scheduler.mjs --schedule-both",
     "install-tasks": "powershell -ExecutionPolicy Bypass -File install_scheduled_tasks.ps1",
-    "cron-schedule-mac": "./cron_scheduler_mac.sh schedule",
     "cron-msm-mac": "./cron_scheduler_mac.sh msm",
-    "cron-both-mac": "./cron_scheduler_mac.sh both",
-    "install-cron-mac": "./cron_scheduler_mac.sh install"
+    "install-cron-mac": "./cron_scheduler_mac.sh install",
+    "install-cron-linux": "./cron_scheduler_mac.sh install"
   },
   "keywords": [],
   "author": "",

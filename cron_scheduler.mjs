@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Cron Job Scheduler for ABS Scrapers
+ * Cron Job Scheduler for ABS Mobile Shift Maintenance Scraper
  * 
  * This script provides multiple scheduling options:
  * 1. Windows Task Scheduler integration
@@ -9,9 +9,7 @@
  * 3. Manual execution with logging
  * 
  * Usage:
- * - node cron_scheduler.mjs --schedule-schedule    # Run schedule scraper
  * - node cron_scheduler.mjs --schedule-msm         # Run MSM scraper
- * - node cron_scheduler.mjs --schedule-both        # Run both scrapers
  * - node cron_scheduler.mjs --install-windows      # Install Windows Task Scheduler tasks
  */
 
@@ -113,15 +111,6 @@ class CronScheduler {
     return { success: false, error: 'Max retries exceeded' };
   }
 
-  async runScheduleScraper() {
-    this.log('=== Running Schedule Scraper ===');
-    
-    // Ensure computer is awake before running
-    await this.ensureComputerIsAwake();
-    
-    return await this.runWithRetry('schedule_scrape.mjs');
-  }
-
   async runMSMScraper() {
     this.log('=== Running MSM Scraper ===');
     
@@ -129,23 +118,6 @@ class CronScheduler {
     await this.ensureComputerIsAwake();
     
     return await this.runWithRetry('mobile_shift_maintenance_scrape.mjs');
-  }
-
-  async runBothScrapers() {
-    this.log('=== Running Both Scrapers ===');
-    
-    // Ensure computer is awake before running
-    await this.ensureComputerIsAwake();
-    
-    const results = {
-      schedule: await this.runScheduleScraper(),
-      msm: await this.runMSMScraper()
-    };
-    
-    const successCount = Object.values(results).filter(r => r.success).length;
-    this.log(`Completed ${successCount}/2 scrapers successfully`);
-    
-    return results;
   }
 
   async installWindowsTasks() {
@@ -156,19 +128,19 @@ class CronScheduler {
     
     const tasks = [
       {
-        name: 'ABS-Both-Scrapers',
-        description: 'Run both ABS scrapers with Monday.com sync',
-        command: `"${nodePath}" "${scriptPath}" --schedule-both`,
-        schedule: '0 0 * * *' // Midnight daily
+        name: 'ABS-MSM-Scraper',
+        description: 'Run ABS Mobile Shift Maintenance scraper with Monday.com sync',
+        command: `"${nodePath}" "${scriptPath}" --schedule-msm`,
+        schedule: '*/15 * * * *' // Every 15 minutes
       }
     ];
 
     for (const task of tasks) {
       try {
-        // Create the task
-        const createCommand = `schtasks /create /tn "${task.name}" /tr "${task.command}" /sc daily /st 00:00 /f`;
+        // Create the task with minute-based schedule
+        const createCommand = `schtasks /create /tn "${task.name}" /tr "${task.command}" /sc minute /mo 15 /f`;
         await execAsync(createCommand);
-        this.log(`Created Windows task: ${task.name}`);
+        this.log(`Created Windows task: ${task.name} (every 15 minutes)`);
       } catch (error) {
         this.log(`Failed to create task ${task.name}: ${error.message}`, 'ERROR');
       }
@@ -287,16 +259,8 @@ async function main() {
   
   try {
     switch (command) {
-      case '--schedule-schedule':
-        await scheduler.runScheduleScraper();
-        break;
-        
       case '--schedule-msm':
         await scheduler.runMSMScraper();
-        break;
-        
-      case '--schedule-both':
-        await scheduler.runBothScrapers();
         break;
         
       case '--install-windows':
@@ -305,22 +269,17 @@ async function main() {
         
       default:
         console.log(`
-ABS Scraper Cron Scheduler
+ABS Mobile Shift Maintenance Scraper Cron Scheduler
 
 Usage:
-  node cron_scheduler.mjs --schedule-schedule    # Run schedule scraper
   node cron_scheduler.mjs --schedule-msm         # Run MSM scraper  
-  node cron_scheduler.mjs --schedule-both        # Run both scrapers
   node cron_scheduler.mjs --install-windows      # Install Windows Task Scheduler tasks
 
 Examples:
-  # Run schedule scraper now
-  node cron_scheduler.mjs --schedule-schedule
+  # Run MSM scraper now
+  node cron_scheduler.mjs --schedule-msm
   
-  # Run both scrapers now
-  node cron_scheduler.mjs --schedule-both
-  
-  # Install Windows scheduled tasks
+  # Install Windows scheduled tasks (runs every 15 minutes)
   node cron_scheduler.mjs --install-windows
         `);
         break;

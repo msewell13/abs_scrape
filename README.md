@@ -1,11 +1,11 @@
-## ABS Scrapers
+## ABS Mobile Shift Maintenance Scraper
 
-This repo contains two Playwright-based scrapers for the ABS portal:
+This repo contains a Playwright-based scraper for the ABS portal:
 - `mobile_shift_maintenance_scrape.mjs`: scrapes the Mobile Shift Maintenance grid
-- `schedule_scrape.mjs`: scrapes Month Block view from Schedule Master
-- Both scrapers send data directly to Monday.com
+- Sends data directly to Monday.com
+- Runs automatically every 15 minutes via cron job
 
-Both load credentials from a `.env` file and save a reusable Playwright `storageState.json` after login.
+The scraper loads credentials from a `.env` file and saves a reusable Playwright `storageState.json` after login.
 
 ### Monday.com Integration
 
@@ -19,8 +19,8 @@ The scrapers now includes integrated Monday.com sync:
 
 ## Requirements
 
-- Windows or macOS
-- Node.js 18+ and npm installed
+- Windows, macOS, or Linux
+- Node.js 16+ and npm installed
 - Google Chrome (recommended)
 
 Verify versions:
@@ -46,12 +46,36 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 
 ## Install
 
-From this project folder (same for Windows/macOS):
+### Quick Install (All Platforms)
+
+From this project folder:
 ```bash
 npm install
+npx playwright install chromium
 ```
 
 This installs `playwright` and `dotenv` used by the scripts.
+
+### Linux Automated Setup
+
+For Linux systems, use the automated installation script:
+
+```bash
+# Make the script executable
+chmod +x install_linux.sh
+
+# Run the automated installer
+./install_linux.sh
+```
+
+The installer will:
+- Detect your Linux distribution
+- Install Node.js if needed
+- Install project dependencies
+- Set up Playwright browsers
+- Create environment file template
+- Install cron job (runs every 15 minutes)
+- Set up log rotation
 
 ---
 
@@ -81,57 +105,22 @@ Notes:
 
 ---
 
-## Script 1: Mobile Shift Maintenance scraper
+## Mobile Shift Maintenance Scraper
 
 File: `mobile_shift_maintenance_scrape.mjs`
 
 What it does:
-- Logs in (using `.env`), navigates to Mobile Shift Maintenance, selects the full current month and selects all exceptions, paginates the Kendo grid, and saves results.
+- Logs in (using `.env`), navigates to Mobile Shift Maintenance, selects the last 8 days and selects all exceptions, paginates the Kendo grid, and saves results
+- Sends data directly to Monday.com board
+- Automatically logs comments using Call Logger
+- Runs every 15 minutes via cron job
 
 Outputs:
 - Data sent directly to Monday.com board
-- `month_block.json` and `month_block.csv` (only if Monday.com sync fails)
-- `storageState.json`
-
-Run:
-
-- Windows (PowerShell)
-```powershell
-node .\mobile_shift_maintenance_scrape.mjs
-```
-
-- macOS/Linux (bash/zsh)
-```bash
-node ./mobile_shift_maintenance_scrape.mjs
-```
-
----
-
-## Script 2: Schedule Month Block scraper (with Monday.com integration)
-
-File: `schedule_scrape.mjs`
-
-What it does:
-- Logs in (using `.env`), goes to Schedule Master, switches to Month tab → Month Block view, scrapes all visible cards with date inference
-- **NEW**: Sends data directly to Monday.com (no intermediate files)
-- Falls back to local files if Monday.com sync fails
-
-Outputs:
-- Data sent directly to Monday.com board
-- `month_block.json` and `month_block.csv` (only if Monday.com sync fails)
+- `msm_results.json` and `msm_results.csv` (only if Monday.com sync fails)
 - `storageState.json`
 
 ### Prerequisites for Monday.com Integration
-
-#### For Schedule Scraper (ABS Shift Data)
-
-1. **Create the Monday.com board manually:**
-   - In Monday.com, go to your workspace
-   - Click the "+" button → "Import from Excel"
-   - Upload the `schedule_board_import.xlsx` file (included with sample data)
-   - Name the board "ABS Shift Data" (exact name required)
-   - After import, copy the Board ID from the URL and add it to your `.env` file
-   - **Note:** The Excel file contains sample data - you can delete the sample rows after import
 
 #### For MSM Scraper (MSM Shift Data)
 
@@ -145,38 +134,24 @@ Outputs:
 
 ### Run Commands
 
-**Schedule Scraper with Monday.com (recommended):**
-```bash
-npm run scrape-monday
-```
-
 **MSM Scraper with Monday.com (recommended):**
 ```bash
 npm run scrape-msm-monday
 ```
 
-**Original scrapers (local files only):**
-```bash
-npm run scrape          # Schedule scraper
-npm run scrape-msm      # MSM scraper
-```
-
 **Manual sync to Monday.com:**
 ```bash
-npm run sync-monday     # Sync existing schedule data
 npm run sync-msm-monday # Sync existing MSM data
 ```
 
 **Manual run:**
 - Windows (PowerShell)
 ```powershell
-node .\schedule_scrape.mjs
 node .\mobile_shift_maintenance_scrape.mjs
 ```
 
 - macOS/Linux (bash/zsh)
 ```bash
-node ./schedule_scrape.mjs
 node ./mobile_shift_maintenance_scrape.mjs
 ```
 
@@ -184,20 +159,23 @@ node ./mobile_shift_maintenance_scrape.mjs
 
 ## Automated Scheduling (Cron Jobs)
 
-The project includes automated scheduling capabilities for running scrapers at regular intervals.
+The project includes automated scheduling capabilities for running the MSM scraper every 15 minutes.
 
 ### Quick Start
 
-**Run scrapers with cron scheduler:**
+**Run MSM scraper with cron scheduler:**
 ```bash
-npm run cron-both        # Run both scrapers (recommended)
-npm run cron-schedule    # Run schedule scraper only
 npm run cron-msm         # Run MSM scraper only
 ```
 
-**Install Windows scheduled tasks:**
+**Install scheduled tasks:**
 ```bash
+# Windows
 npm run install-tasks    # Install Windows Task Scheduler task
+
+# macOS/Linux
+npm run install-cron-mac    # macOS
+npm run install-cron-linux  # Linux
 ```
 
 ### Windows Task Scheduler Setup
@@ -207,22 +185,26 @@ npm run install-tasks    # Install Windows Task Scheduler task
    npm run install-tasks
    ```
    This creates one scheduled task:
-   - `ABS-Both-Scrapers` (Daily at midnight)
+   - `ABS-MSM-Scraper` (Every 15 minutes)
 
 2. **Manual Installation:**
    - Open Task Scheduler (`taskschd.msc`)
-   - Create Basic Task → Name: "ABS-Both-Scrapers"
-   - Trigger: Daily → Start time: 12:00 AM → Recur every: 1 day
-   - Action: Start a program → Program: `node` → Arguments: `"C:\path\to\cron_scheduler.mjs" --schedule-both`
+   - Create Basic Task → Name: "ABS-MSM-Scraper"
+   - Trigger: Daily → Start time: 12:00 AM → Recur every: 15 minutes
+   - Action: Start a program → Program: `node` → Arguments: `"C:\path\to\cron_scheduler.mjs" --schedule-msm`
 
 ### macOS/Linux Cron Setup
 
 1. **Automatic Installation:**
    ```bash
+   # macOS
    npm run install-cron-mac
+   
+   # Linux
+   npm run install-cron-linux
    ```
    This creates one cron job:
-   - Both Scrapers (Daily at midnight)
+   - MSM Scraper (Every 15 minutes)
 
 2. **Manual Installation:**
    ```bash
@@ -238,15 +220,11 @@ npm run install-tasks    # Install Windows Task Scheduler task
 
 3. **Manual Execution:**
    ```bash
-   # Run scrapers manually
-   ./cron_scheduler_mac.sh schedule    # Schedule scraper
-   ./cron_scheduler_mac.sh msm         # MSM scraper
-   ./cron_scheduler_mac.sh both        # Both scrapers
+   # Run MSM scraper manually
+   ./cron_scheduler_mac.sh msm
    
    # Or using npm scripts
-   npm run cron-schedule-mac
    npm run cron-msm-mac
-   npm run cron-both-mac
    ```
 
 ### Cron Scheduler Features
@@ -281,26 +259,19 @@ The cron scheduler automatically handles computers in sleep mode:
 
 ### Log Files
 
-- **Location**: `logs/cron-YYYY-MM-DD.log`
+- **Location**: `logs/cron-msm.log` and `logs/cron-YYYY-MM-DD.log`
 - **Retention**: Last 30 days of logs kept automatically
 - **Format**: `[TIMESTAMP] [LEVEL] MESSAGE`
 
 ### Manual Execution
 
-**Using batch files:**
-```bash
-run_schedule.bat    # Run schedule scraper
-run_msm.bat         # Run MSM scraper
-run_both.bat        # Run both scrapers
-```
-
 **Using PowerShell:**
 ```powershell
-# Run with custom times
-.\install_scheduled_tasks.ps1 -ScheduleTime "07:00" -MSMTime "08:00"
+# Run MSM scraper manually
+node .\cron_scheduler.mjs --schedule-msm
 
-# Force overwrite existing tasks
-.\install_scheduled_tasks.ps1 -Force
+# Install Windows scheduled tasks
+.\install_scheduled_tasks.ps1
 ```
 
 ### Troubleshooting Scheduling
@@ -331,8 +302,252 @@ run_both.bat        # Run both scrapers
 - Login issues:
   - Verify `.env` values and that the login page still uses `#UserName` / `#Password` fields.
 - **Monday.com board creation issues:**
-  - If board import fails: Ensure the board is named exactly "ABS Shift Data"
-  - If sync fails: Check that `MONDAY_SCHEDULE_BOARD_ID` is set correctly in `.env`
+  - If board import fails: Ensure the board is named exactly "MSM Shift Data"
+  - If sync fails: Check that `MONDAY_MSM_BOARD_ID` is set correctly in `.env`
 - Partial/empty results (Mobile Shift Maintenance):
   - The script automatically selects all exceptions and paginates the grid.
-  - Verify the date range is the month you expect.
+  - Verify the date range is the last 8 days as expected.
+
+---
+
+## Linux Setup Instructions
+
+This section provides detailed setup instructions for Linux systems.
+
+### Prerequisites
+
+1. **Node.js**: Version 16 or higher
+2. **npm**: Comes with Node.js
+3. **Playwright**: Will be installed automatically
+4. **Cron**: Usually pre-installed on Linux systems
+
+### Installation Steps
+
+#### 1. Install Node.js (if not already installed)
+
+**Ubuntu/Debian:**
+```bash
+# Update package index
+sudo apt update
+
+# Install Node.js and npm
+sudo apt install nodejs npm
+
+# Verify installation
+node --version
+npm --version
+```
+
+**CentOS/RHEL/Fedora:**
+```bash
+# Install Node.js and npm
+sudo yum install nodejs npm
+# or for newer versions:
+sudo dnf install nodejs npm
+
+# Verify installation
+node --version
+npm --version
+```
+
+**Using Node Version Manager (nvm) - Recommended:**
+```bash
+# Install nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+
+# Reload shell
+source ~/.bashrc
+
+# Install latest LTS Node.js
+nvm install --lts
+nvm use --lts
+
+# Verify installation
+node --version
+npm --version
+```
+
+#### 2. Install Project Dependencies
+
+```bash
+# Navigate to project directory
+cd /path/to/abs_scrape
+
+# Install dependencies
+npm install
+
+# Install Playwright browsers
+npx playwright install chromium
+```
+
+#### 3. Configure Environment Variables
+
+Create a `.env` file in the project root:
+
+```bash
+# Create .env file
+nano .env
+```
+
+Add the following content (replace with your actual values):
+
+```env
+# ABS Login Credentials
+ABS_USER=your_username
+ABS_PASS=your_password
+ABS_LOGIN_URL=https://abs.brightstarcare.com/Account/Login
+
+# Monday.com Integration (optional)
+MONDAY_API_TOKEN=your_monday_api_token
+MONDAY_MSM_BOARD_ID=your_board_id
+```
+
+#### 4. Make Scripts Executable
+
+```bash
+# Make the cron scheduler script executable
+chmod +x cron_scheduler_mac.sh
+
+# Test the script
+./cron_scheduler_mac.sh msm
+```
+
+#### 5. Install Cron Job
+
+```bash
+# Install the cron job (runs every 15 minutes)
+./cron_scheduler_mac.sh install
+```
+
+#### 6. Verify Installation
+
+```bash
+# Check if cron job was installed
+crontab -l
+
+# You should see something like:
+# */15 * * * * cd /path/to/abs_scrape && ./cron_scheduler_mac.sh msm >> /path/to/abs_scrape/logs/cron-msm.log 2>&1
+```
+
+### Manual Operations
+
+**Run Scraper Manually:**
+```bash
+# Run the MSM scraper once
+./cron_scheduler_mac.sh msm
+
+# Or use npm script
+npm run cron-msm-mac
+```
+
+**Check Logs:**
+```bash
+# View recent logs
+tail -f logs/cron-msm.log
+
+# View all log files
+ls -la logs/
+```
+
+**Uninstall Cron Job:**
+```bash
+# Remove the cron job
+./cron_scheduler_mac.sh uninstall
+```
+
+### Linux Troubleshooting
+
+**Common Issues:**
+
+1. **Permission Denied:**
+   ```bash
+   chmod +x cron_scheduler_mac.sh
+   ```
+
+2. **Node.js Not Found:**
+   - Make sure Node.js is in your PATH
+   - Try using full path: `/usr/bin/node` or `/usr/local/bin/node`
+
+3. **Playwright Issues:**
+   ```bash
+   # Reinstall Playwright browsers
+   npx playwright install chromium
+   ```
+
+4. **Cron Job Not Running:**
+   - Check if cron service is running: `sudo systemctl status cron`
+   - Check cron logs: `sudo journalctl -u cron`
+   - Verify the cron job exists: `crontab -l`
+
+5. **Authentication Issues:**
+   - Verify your credentials in the `.env` file
+   - Check if the ABS website is accessible
+   - Look for login errors in the logs
+
+**Log Locations:**
+- **Cron logs**: `logs/cron-msm.log`
+- **System cron logs**: `/var/log/cron` or `/var/log/syslog`
+- **Application logs**: `logs/cron-YYYY-MM-DD.log`
+
+**Monitoring:**
+```bash
+# Monitor cron job execution
+tail -f logs/cron-msm.log
+
+# Check if cron job is scheduled
+crontab -l
+
+# View system cron logs
+sudo tail -f /var/log/cron
+```
+
+### Security Considerations
+
+1. **File Permissions**: Ensure the `.env` file has restricted permissions:
+   ```bash
+   chmod 600 .env
+   ```
+
+2. **User Account**: Consider running the cron job under a dedicated user account:
+   ```bash
+   # Create dedicated user
+   sudo useradd -m -s /bin/bash abs_scraper
+   
+   # Switch to that user and set up the project
+   sudo su - abs_scraper
+   ```
+
+3. **Log Rotation**: Set up log rotation to prevent logs from growing too large:
+   ```bash
+   # Create logrotate configuration
+   sudo nano /etc/logrotate.d/abs_scraper
+   ```
+   
+   Add:
+   ```
+   /path/to/abs_scrape/logs/*.log {
+       daily
+       missingok
+       rotate 30
+       compress
+       notifempty
+       create 644 abs_scraper abs_scraper
+   }
+   ```
+
+### System Requirements
+
+- **RAM**: Minimum 2GB, recommended 4GB+
+- **Disk Space**: At least 1GB free space for logs and data
+- **Network**: Stable internet connection
+- **OS**: Linux (Ubuntu, CentOS, RHEL, Debian, etc.)
+
+### Support
+
+If you encounter issues:
+
+1. Check the logs first: `tail -f logs/cron-msm.log`
+2. Verify your environment variables are correct
+3. Test the scraper manually: `./cron_scheduler_mac.sh msm`
+4. Check system resources (memory, disk space)
+5. Verify network connectivity to the ABS website

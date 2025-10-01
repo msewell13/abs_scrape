@@ -21,7 +21,7 @@ const BOARD_ID = process.env.MONDAY_MSM_BOARD_ID; // Optional: specify existing 
 const COLUMN_MAPPINGS = {
   'Date': 'date',
   'Customer': 'text',
-  'Employee': 'text',
+  'Employee': 'board_relation',
   'Sch Start': 'text',
   'Sch End': 'text',
   'Sch Hrs': 'text',
@@ -153,6 +153,55 @@ class MSMMondayIntegration {
     }
   }
 
+  async updateEmployeeBoardRelation(itemId, employeeName, boardId, columns, employeeBoardId) {
+    try {
+      const employeeColumn = columns.find(col => col.title === 'Employee');
+      
+      if (!employeeColumn) {
+        console.log('Employee column not found');
+        return;
+      }
+      
+      if (!employeeBoardId) {
+        console.log('Employee board ID not found');
+        return;
+      }
+      
+      const employeeItemId = await this.findEmployeeItemId(employeeName, employeeBoardId);
+      if (!employeeItemId) {
+        console.log(`Could not find employee item for "${employeeName}"`);
+        return;
+      }
+      
+      // Use change_column_value for board-relation columns
+      const query = `
+        mutation ChangeColumnValue($itemId: ID!, $boardId: ID!, $columnId: String!, $value: JSON!) {
+          change_column_value(
+            item_id: $itemId,
+            board_id: $boardId,
+            column_id: $columnId,
+            value: $value
+          ) {
+            id
+          }
+        }
+      `;
+      
+      const variables = {
+        itemId: itemId,
+        boardId: boardId,
+        columnId: employeeColumn.id,
+        value: JSON.stringify({item_ids: [employeeItemId]})
+      };
+      
+      console.log(`Updating Employee board-relation for "${employeeName}": ${variables.value}`);
+      await this.makeRequest(query, variables);
+      console.log(`✅ Successfully updated Employee board-relation for "${employeeName}"`);
+    } catch (error) {
+      console.error(`Failed to update Employee board-relation for item ${itemId}:`, error.message);
+    }
+  }
+
   async findBoardByName(boardName) {
     const query = `
       query {
@@ -175,6 +224,7 @@ class MSMMondayIntegration {
             id
             title
             type
+            settings_str
           }
         }
       }
@@ -182,6 +232,89 @@ class MSMMondayIntegration {
     
     const data = await this.makeRequest(query);
     return data.boards[0].columns;
+  }
+
+  async getEmployeeBoardItems(employeeBoardId) {
+    const allItems = [];
+    let cursor = null;
+    const limit = 500;
+
+    do {
+      const query = `
+        query {
+          boards(ids: [${employeeBoardId}]) {
+            items_page(limit: ${limit}${cursor ? `, cursor: "${cursor}"` : ''}) {
+              items {
+                id
+                name
+              }
+              cursor
+            }
+          }
+        }
+      `;
+      const data = await this.makeRequest(query);
+      const itemsPage = data.boards[0].items_page;
+      allItems.push(...itemsPage.items);
+      cursor = itemsPage.cursor;
+    } while (cursor);
+    
+    return allItems;
+  }
+
+  async findEmployeeItemId(employeeName, employeeBoardId) {
+    try {
+      const employeeItems = await this.getEmployeeBoardItems(employeeBoardId);
+      
+      // Try exact match first
+      let employee = employeeItems.find(item => item.name === employeeName);
+      if (employee) {
+        return employee.id;
+      }
+      
+      // Try case-insensitive match
+      employee = employeeItems.find(item => item.name.toLowerCase() === employeeName.toLowerCase());
+      if (employee) {
+        return employee.id;
+      }
+      
+      // Try partial match (last name only)
+      const lastName = employeeName.split(',')[0]?.trim();
+      if (lastName) {
+        employee = employeeItems.find(item => {
+          const itemLastName = item.name.split(',')[0]?.trim();
+          return itemLastName && itemLastName.toLowerCase() === lastName.toLowerCase();
+        });
+        if (employee) {
+          return employee.id;
+        }
+      }
+      
+      console.log(`Could not find employee item for "${employeeName}"`);
+      return null;
+    } catch (error) {
+      console.error(`Error finding employee item for "${employeeName}":`, error.message);
+      return null;
+    }
+  }
+
+  async getEmployeeBoardId(employeeColumn) {
+    try {
+      if (employeeColumn.settings_str) {
+        const settings = JSON.parse(employeeColumn.settings_str);
+        const boardId = settings.linkedPulseId || settings.linked_board_id || settings.linkedBoardId || (settings.boardIds && settings.boardIds[0]);
+        if (boardId) {
+          return boardId;
+        }
+      }
+      
+      // Fallback to hardcoded employee board ID
+      return '18076293881';
+    } catch (error) {
+      console.error('Error parsing employee column settings:', error.message);
+      // Fallback to hardcoded employee board ID
+      return '18076293881';
+    }
   }
 
   async createColumn(boardId, title, type) {
@@ -390,6 +523,18 @@ class MSMMondayIntegration {
     const batchSize = 20;
     let totalCreated = 0;
     
+    // Get employee board ID for board_relation column
+    const employeeColumn = columns.find(col => col.title === 'Employee');
+    let employeeBoardId = null;
+    if (employeeColumn && employeeColumn.type === 'board_relation') {
+      employeeBoardId = await this.getEmployeeBoardId(employeeColumn);
+      if (employeeBoardId) {
+        console.log(`Found employee board ID: ${employeeBoardId}`);
+      } else {
+        console.log('Warning: Could not find employee board ID for board_relation column');
+      }
+    }
+    
     for (let i = 0; i < records.length; i += batchSize) {
       const batch = records.slice(i, i + batchSize);
       
@@ -416,6 +561,10 @@ class MSMMondayIntegration {
               } else if (column.type === 'dropdown' && key === 'Exception Types') {
                 // Skip Exception Types for now - we'll update it separately
                 continue;
+              } else if (column.type === 'board_relation' && key === 'Employee') {
+                // Skip board_relation columns during initial creation - we'll update them separately
+                console.log(`Skipping Employee board-relation column during creation for "${value}"`);
+                continue;
               }
               
               columnValues[column.id] = columnValue;
@@ -440,11 +589,18 @@ class MSMMondayIntegration {
             columnValues: JSON.stringify(columnValues)
           };
           
+          console.log(`Creating item with column values:`, JSON.stringify(columnValues, null, 2));
+          
           const result = await this.makeRequest(query, variables);
           
           // Update Exception Types field separately with create_labels_if_missing
           if (record['Exception Types']) {
             await this.updateExceptionTypes(result.create_item.id, record['Exception Types'], boardId, columns);
+          }
+          
+          // Update Employee board-relation field separately
+          if (record['Employee']) {
+            await this.updateEmployeeBoardRelation(result.create_item.id, record['Employee'], boardId, columns, employeeBoardId);
           }
           
           return true;
@@ -471,6 +627,13 @@ class MSMMondayIntegration {
     // Use the provided item name (date with customer/employee for uniqueness)
     const safeItemName = itemName.replace(/"/g, '\\"');
     
+    // Get employee board ID for board_relation column
+    const employeeColumn = columns.find(col => col.title === 'Employee');
+    let employeeBoardId = null;
+    if (employeeColumn && employeeColumn.type === 'board_relation') {
+      employeeBoardId = await this.getEmployeeBoardId(employeeColumn);
+    }
+    
     // Map data to column values
     const columnValues = {};
     
@@ -490,6 +653,10 @@ class MSMMondayIntegration {
           // Parse multiple exceptions for dropdown field
           const exceptions = this.parseExceptionTypes(value);
           columnValue = exceptions.join(',');
+        } else if (column.type === 'board_relation' && key === 'Employee') {
+          // Skip board_relation columns during initial creation - we'll update them separately
+          console.log(`Skipping Employee board-relation column during creation for "${value}"`);
+          continue;
         }
         
         columnValues[column.id] = columnValue;
@@ -519,6 +686,13 @@ class MSMMondayIntegration {
   }
 
   async updateItem(boardId, itemId, itemData, columns) {
+    // Get employee board ID for board_relation column
+    const employeeColumn = columns.find(col => col.title === 'Employee');
+    let employeeBoardId = null;
+    if (employeeColumn && employeeColumn.type === 'board_relation') {
+      employeeBoardId = await this.getEmployeeBoardId(employeeColumn);
+    }
+    
     // Map data to column values
     const columnValues = {};
     
@@ -541,6 +715,10 @@ class MSMMondayIntegration {
           // Parse multiple exceptions for dropdown field
           const exceptions = this.parseExceptionTypes(value);
           columnValue = exceptions.join(',');
+        } else if (column.type === 'board_relation' && key === 'Employee') {
+          // Skip board_relation columns during initial creation - we'll update them separately
+          console.log(`Skipping Employee board-relation column during creation for "${value}"`);
+          continue;
         }
         
         columnValues[column.id] = columnValue;
@@ -573,6 +751,17 @@ class MSMMondayIntegration {
       const exceptionTypesColumn = columns.find(col => col.title === 'Exception Types');
       if (exceptionTypesColumn) {
         await this.updateExceptionTypes(itemId, itemData['Exception Types'], boardId, columns);
+      }
+    }
+    
+    // Update Employee board-relation separately if needed
+    if (itemData['Employee']) {
+      const employeeColumn = columns.find(col => col.title === 'Employee');
+      if (employeeColumn && employeeColumn.type === 'board_relation') {
+        const employeeBoardId = await this.getEmployeeBoardId(employeeColumn);
+        if (employeeBoardId) {
+          await this.updateEmployeeBoardRelation(itemId, itemData['Employee'], boardId, columns, employeeBoardId);
+        }
       }
     }
     
@@ -707,6 +896,12 @@ class MSMMondayIntegration {
       // Get board columns
       const columns = await this.getBoardColumns(board.id);
       console.log(`MSM board has ${columns.length} columns`);
+      
+      // Debug: Log all column types
+      // console.log('Column types:');
+      // columns.forEach(col => {
+      //   console.log(`- ${col.title}: ${col.type}`);
+      // });
       
       // Check if "Comments Logged" column exists, create it if not
       const commentsLoggedColumn = columns.find(col => col.title === 'Comments Logged');
