@@ -12,6 +12,36 @@ The scraper loads credentials from a `.env` file and saves a reusable Playwright
 
 Get the ABS scrapers up and running in just a few minutes! This guide will walk you through everything step-by-step.
 
+### 🎯 Automated Installation (Recommended)
+
+**For the easiest setup, use our automated installer:**
+
+1. **Download and run the installer:**
+   - **Windows:** Download `install.bat` and double-click it
+   - **Mac/Linux:** Download `install.sh` and run: `bash install.sh`
+   - **Any platform:** Run `node install.mjs` (if you have Node.js)
+
+2. **Follow the prompts** - the installer will:
+   - Detect your operating system
+   - Install Node.js and Git if needed
+   - Download the latest code
+   - Install all dependencies
+   - Ask for your credentials
+   - Set up Monday.com boards automatically
+   - Test the installation
+
+**That's it!** The installer handles everything automatically.
+
+**Installer Options:**
+- `node install.mjs --test` - Test mode (check requirements only, skip credentials)
+- `node install.mjs --help` - Show help and usage information
+
+---
+
+### 📋 Manual Installation (Alternative)
+
+If you prefer to set up manually or the automated installer doesn't work:
+
 ### Step 1: Install Node.js
 1. Go to [nodejs.org](https://nodejs.org/)
 2. Download and install the **LTS version** (recommended)
