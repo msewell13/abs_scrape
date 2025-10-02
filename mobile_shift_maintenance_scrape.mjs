@@ -226,8 +226,8 @@ async function run() {
   // Skip exception dropdown check - using default selection
   console.log('Skipping exception dropdown check - using default selection');
 
-  // Handle Location dropdown - try to select "Select All" if available
-  console.log('Checking Location dropdown for "Select All" option...');
+  // Handle Location dropdown - try to select "All" if available
+  console.log('Checking Location dropdown for "All" option...');
   await page.evaluate(() => {
     try {
       // Find the location dropdown wrapper
@@ -240,21 +240,22 @@ async function run() {
         
         // Wait a moment for dropdown to open
         setTimeout(() => {
-          // Look for "Select All" option in the dropdown list
+          // Look for "All" option in the dropdown list
           const dropdownList = document.querySelector('#ddlLocation_listbox');
           if (dropdownList) {
             console.log('Found location dropdown list');
             
-            // Look for "Select All" option
-            const selectAllOption = Array.from(dropdownList.querySelectorAll('.k-item')).find(item => 
-              item.textContent && item.textContent.trim().toLowerCase().includes('select all')
-            );
+            // Look for "All" option (exact match or contains "All")
+            const allOption = Array.from(dropdownList.querySelectorAll('.k-item')).find(item => {
+              const text = item.textContent && item.textContent.trim().toLowerCase();
+              return text === 'all' || text.includes('all');
+            });
             
-            if (selectAllOption) {
-              console.log('Found "Select All" option, clicking it');
-              selectAllOption.click();
+            if (allOption) {
+              console.log('Found "All" option, clicking it');
+              allOption.click();
             } else {
-              console.log('No "Select All" option found, keeping default selection');
+              console.log('No "All" option found, keeping default selection');
               // Close the dropdown by clicking the wrapper again
               locationWrapper.click();
             }
