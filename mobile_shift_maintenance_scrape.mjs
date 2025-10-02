@@ -228,53 +228,50 @@ async function run() {
 
   // Handle Location dropdown - try to select "All" if available
   console.log('Checking Location dropdown for "All" option...');
-  await page.evaluate(() => {
-    try {
-      // Find the location dropdown wrapper
-      const locationWrapper = document.querySelector('#divDdlLocation .k-dropdown-wrap');
-      if (locationWrapper) {
-        console.log('Found location dropdown wrapper');
-        
-        // Click to open the dropdown
-        locationWrapper.click();
-        
-        // Wait a moment for dropdown to open
-        setTimeout(() => {
-          // Look for "All" option in the dropdown list
-          const dropdownList = document.querySelector('#ddlLocation_listbox');
-          if (dropdownList) {
-            console.log('Found location dropdown list');
-            
-            // Look for "All" option (exact match or contains "All")
-            const allOption = Array.from(dropdownList.querySelectorAll('.k-item')).find(item => {
-              const text = item.textContent && item.textContent.trim().toLowerCase();
-              return text === 'all' || text.includes('all');
-            });
-            
-            if (allOption) {
-              console.log('Found "All" option, clicking it');
-              allOption.click();
-            } else {
-              console.log('No "All" option found, keeping default selection');
-              // Close the dropdown by clicking the wrapper again
-              locationWrapper.click();
-            }
-          } else {
-            console.log('Location dropdown list not found');
-            // Close the dropdown by clicking the wrapper again
-            locationWrapper.click();
-          }
-        }, 500);
+  try {
+    // Check if location dropdown exists
+    const locationWrapper = page.locator('#divDdlLocation .k-dropdown-wrap');
+    if (await locationWrapper.count() > 0) {
+      console.log('Found location dropdown wrapper');
+      
+      // Click to open the dropdown
+      await locationWrapper.click();
+      
+      // Wait for dropdown list to appear
+      await page.waitForSelector('#ddlLocation_listbox', { timeout: 2000 });
+      console.log('Location dropdown list opened');
+      
+      // Look for "All" option
+      const allOption = page.locator('#ddlLocation_listbox .k-item').filter({ 
+        hasText: /^all$/i 
+      }).or(page.locator('#ddlLocation_listbox .k-item').filter({ 
+        hasText: /all/i 
+      }));
+      
+      if (await allOption.count() > 0) {
+        console.log('Found "All" option, clicking it');
+        await allOption.first().click();
+        console.log('Successfully selected "All" option');
       } else {
-        console.log('Location dropdown wrapper not found, keeping default selection');
+        console.log('No "All" option found, keeping default selection');
+        // Close the dropdown by clicking the wrapper again
+        await locationWrapper.click();
       }
-    } catch (error) {
-      console.log('Error handling location dropdown:', error.message);
+    } else {
+      console.log('Location dropdown wrapper not found, keeping default selection');
     }
-  });
-
-  // Wait for location dropdown handling to complete
-  await page.waitForTimeout(1000);
+  } catch (error) {
+    console.log('Error handling location dropdown:', error.message);
+    // Try to close dropdown if it's open
+    try {
+      const locationWrapper = page.locator('#divDdlLocation .k-dropdown-wrap');
+      if (await locationWrapper.count() > 0) {
+        await locationWrapper.click();
+      }
+    } catch (closeError) {
+      console.log('Could not close dropdown:', closeError.message);
+    }
+  }
 
   // Use page.evaluate to interact with Kendo widgets (DatePicker & MultiSelect)
   // We set Start/End to 8 days ago to today and use default exception selection.
