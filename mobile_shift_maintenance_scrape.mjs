@@ -226,6 +226,55 @@ async function run() {
   // Skip exception dropdown check - using default selection
   console.log('Skipping exception dropdown check - using default selection');
 
+  // Handle Location dropdown - try to select "Select All" if available
+  console.log('Checking Location dropdown for "Select All" option...');
+  await page.evaluate(() => {
+    try {
+      // Find the location dropdown wrapper
+      const locationWrapper = document.querySelector('#divDdlLocation .k-dropdown-wrap');
+      if (locationWrapper) {
+        console.log('Found location dropdown wrapper');
+        
+        // Click to open the dropdown
+        locationWrapper.click();
+        
+        // Wait a moment for dropdown to open
+        setTimeout(() => {
+          // Look for "Select All" option in the dropdown list
+          const dropdownList = document.querySelector('#ddlLocation_listbox');
+          if (dropdownList) {
+            console.log('Found location dropdown list');
+            
+            // Look for "Select All" option
+            const selectAllOption = Array.from(dropdownList.querySelectorAll('.k-item')).find(item => 
+              item.textContent && item.textContent.trim().toLowerCase().includes('select all')
+            );
+            
+            if (selectAllOption) {
+              console.log('Found "Select All" option, clicking it');
+              selectAllOption.click();
+            } else {
+              console.log('No "Select All" option found, keeping default selection');
+              // Close the dropdown by clicking the wrapper again
+              locationWrapper.click();
+            }
+          } else {
+            console.log('Location dropdown list not found');
+            // Close the dropdown by clicking the wrapper again
+            locationWrapper.click();
+          }
+        }, 500);
+      } else {
+        console.log('Location dropdown wrapper not found, keeping default selection');
+      }
+    } catch (error) {
+      console.log('Error handling location dropdown:', error.message);
+    }
+  });
+
+  // Wait for location dropdown handling to complete
+  await page.waitForTimeout(1000);
+
   // Use page.evaluate to interact with Kendo widgets (DatePicker & MultiSelect)
   // We set Start/End to 8 days ago to today and use default exception selection.
   const startText = mmddyyyy(eightDaysAgo);
