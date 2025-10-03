@@ -6,6 +6,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import ConnectTeamIntegration from './connectteam_integration.mjs';
 
 dotenv.config();
 
@@ -336,6 +337,69 @@ class MSMMondayIntegration {
         throw new Error('EMPLOYEE_BOARD_ID environment variable is required');
       }
       return process.env.EMPLOYEE_BOARD_ID;
+    }
+  }
+
+  async getEmployeeConnectTeamUserId(employeeName, employeeBoardId) {
+    try {
+      // Get employee board items with column values to access CTUserId
+      const query = `
+        query {
+          boards(ids: [${employeeBoardId}]) {
+            items {
+              id
+              name
+              column_values {
+                id
+                text
+                value
+              }
+            }
+          }
+        }
+      `;
+      
+      const data = await this.makeRequest(query);
+      const employeeItems = data.boards[0].items;
+      
+      // Find the employee by name (same logic as findEmployeeItemId)
+      let employee = employeeItems.find(item => item.name === employeeName);
+      if (!employee) {
+        employee = employeeItems.find(item => item.name.toLowerCase() === employeeName.toLowerCase());
+      }
+      if (!employee) {
+        const lastName = employeeName.split(',')[0]?.trim();
+        if (lastName) {
+          employee = employeeItems.find(item => {
+            const itemLastName = item.name.split(',')[0]?.trim();
+            return itemLastName && itemLastName.toLowerCase() === lastName.toLowerCase();
+          });
+        }
+      }
+      
+      if (!employee) {
+        console.log(`Could not find employee "${employeeName}" in employee board`);
+        return null;
+      }
+      
+      // Find CTUserId column
+      const ctUserIdColumn = employee.column_values.find(cv => cv.id.includes('CTUserId') || cv.text.includes('CTUserId'));
+      if (!ctUserIdColumn) {
+        console.log(`No CTUserId column found for employee "${employeeName}"`);
+        return null;
+      }
+      
+      const ctUserId = ctUserIdColumn.text || ctUserIdColumn.value;
+      if (!ctUserId || ctUserId === '') {
+        console.log(`No ConnectTeam user ID found for employee "${employeeName}"`);
+        return null;
+      }
+      
+      console.log(`Found ConnectTeam user ID for "${employeeName}": ${ctUserId}`);
+      return ctUserId;
+    } catch (error) {
+      console.error(`Error getting ConnectTeam user ID for "${employeeName}":`, error.message);
+      return null;
     }
   }
 
@@ -912,6 +976,16 @@ class MSMMondayIntegration {
       const columns = await this.getBoardColumns(board.id);
       console.log(`MSM board has ${columns.length} columns`);
       
+      // Initialize ConnectTeam integration
+      let connectTeamIntegration = null;
+      try {
+        connectTeamIntegration = new ConnectTeamIntegration();
+        console.log('✅ ConnectTeam integration initialized');
+      } catch (error) {
+        console.log('⚠️ ConnectTeam integration not available:', error.message);
+        console.log('Skipping ConnectTeam notifications');
+      }
+      
       // Debug: Log all column types
       // console.log('Column types:');
       // columns.forEach(col => {
@@ -1023,6 +1097,24 @@ class MSMMondayIntegration {
             await this.createItem(board.id, record, columns, itemName);
             createdCount++;
             console.log(`✓ Created new item for Shift ID ${shiftId}`);
+            
+            // Send ConnectTeam notification for new items
+            if (connectTeamIntegration && record['Employee']) {
+              try {
+                const employeeColumn = columns.find(col => col.title === 'Employee');
+                if (employeeColumn && employeeColumn.type === 'board_relation') {
+                  const employeeBoardId = await this.getEmployeeBoardId(employeeColumn);
+                  if (employeeBoardId) {
+                    const ctUserId = await this.getEmployeeConnectTeamUserId(record['Employee'], employeeBoardId);
+                    if (ctUserId) {
+                      await connectTeamIntegration.sendShiftNotification(record, ctUserId);
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error(`Failed to send ConnectTeam notification for Shift ID ${shiftId}:`, error.message);
+              }
+            }
           }
         } catch (error) {
           console.error(`Failed to process record with Shift ID ${record['Shift ID']}:`, error.message);
