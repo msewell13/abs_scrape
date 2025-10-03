@@ -219,6 +219,72 @@ For advanced features like scheduling and automation, see the sections below.
 **Debug and Feature Flags:**
 - `DEBUG`: Set to `True` to run scrapers in visible browser mode, `False` for headless mode
 - `CALL_LOGGER_NOTES`: Set to `True` to log employee comments in call logger, `False` to skip this step
+- `CT_NOTIFICATIONS_ENABLED`: Set to `True` to enable ConnectTeam notifications for new MSM records, `False` to disable
+
+### 📱 ConnectTeam Notifications
+
+The MSM scraper can automatically send private messages to employees via ConnectTeam when new shift records with exceptions are added to Monday.com.
+
+**How it works:**
+1. When a **new** MSM shift record is created (not updated)
+2. System looks up the employee's ConnectTeam user ID from the employee board's `CTUserId` column
+3. Sends a formatted private message with shift details and exception information
+4. Employee receives notification asking for explanation of the issues
+
+**Message format:**
+```
+Hi, we have a documentation/records issue for your recent shift with [Client] on [Date] that we need your help to address.
+
+Can you please reply to this message with an explanation as to the issue(s) noted below?
+
+Shift issues are listed below:
+[Exception Types]
+
+Your shift was scheduled to start at [Scheduled Start] and you clocked in at [Actual Start]
+
+Your shift was scheduled to end at [Scheduled End] and you clocked out at [Actual End]
+```
+
+**Setup requirements:**
+- `CT_API_KEY`: Your ConnectTeam API key
+- `CT_SENDER_ID`: Fixed sender ID (12014505)
+- `CT_NOTIFICATIONS_ENABLED`: Set to `True` to enable
+- Employee board must have a `CTUserId` column with ConnectTeam user IDs
+
+**To enable ConnectTeam notifications:**
+1. Add your ConnectTeam API key to `.env`:
+   ```
+   CT_API_KEY=your_connectteam_api_key_here
+   CT_SENDER_ID=12014505
+   CT_NOTIFICATIONS_ENABLED=True
+   ```
+2. Ensure your employee board has a `CTUserId` column with ConnectTeam user IDs
+3. The system will automatically send notifications for new records only
+
+### 🔧 Environment Variables
+
+All configuration is managed through the `.env` file. Copy `.env.sample` to `.env` and fill in your values:
+
+**Required Variables:**
+- `MONDAY_API_TOKEN`: Your Monday.com API token
+- `MONDAY_MSM_BOARD_ID`: MSM Shift Data board ID
+- `EMPLOYEE_BOARD_ID`: Employee lookup board ID
+- `ABS_USER`: Your ABS portal username
+- `ABS_PASS`: Your ABS portal password
+
+**Optional Variables:**
+- `MONDAY_SCHEDULE_BOARD_ID`: Schedule board ID (for schedule scraper)
+- `ABS_LOGIN_URL`: ABS login URL (defaults provided)
+- `ABS_SCHEDULE_URL`: ABS schedule URL (defaults provided)
+
+**Feature Flags:**
+- `DEBUG`: Set to `True` for visible browser mode, `False` for headless
+- `CALL_LOGGER_NOTES`: Set to `True` to enable comment logging
+- `CT_NOTIFICATIONS_ENABLED`: Set to `True` to enable ConnectTeam notifications
+
+**ConnectTeam Integration (Optional):**
+- `CT_API_KEY`: Your ConnectTeam API key
+- `CT_SENDER_ID`: Fixed sender ID (12014505)
 
 ## Automated Scheduling (Cron Jobs)
 

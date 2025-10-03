@@ -976,14 +976,20 @@ class MSMMondayIntegration {
       const columns = await this.getBoardColumns(board.id);
       console.log(`MSM board has ${columns.length} columns`);
       
-      // Initialize ConnectTeam integration
+      // Initialize ConnectTeam integration (if enabled)
       let connectTeamIntegration = null;
-      try {
-        connectTeamIntegration = new ConnectTeamIntegration();
-        console.log('✅ ConnectTeam integration initialized');
-      } catch (error) {
-        console.log('⚠️ ConnectTeam integration not available:', error.message);
-        console.log('Skipping ConnectTeam notifications');
+      const ctNotificationsEnabled = process.env.CT_NOTIFICATIONS_ENABLED === 'True' || process.env.CT_NOTIFICATIONS_ENABLED === 'true';
+      
+      if (ctNotificationsEnabled) {
+        try {
+          connectTeamIntegration = new ConnectTeamIntegration();
+          console.log('✅ ConnectTeam integration initialized (notifications enabled)');
+        } catch (error) {
+          console.log('⚠️ ConnectTeam integration not available:', error.message);
+          console.log('Skipping ConnectTeam notifications');
+        }
+      } else {
+        console.log('ℹ️ ConnectTeam notifications disabled (CT_NOTIFICATIONS_ENABLED=False)');
       }
       
       // Debug: Log all column types

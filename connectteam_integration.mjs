@@ -13,10 +13,10 @@ const CT_SENDER_ID = process.env.CT_SENDER_ID;
 class ConnectTeamIntegration {
   constructor() {
     if (!CT_API_KEY) {
-      throw new Error('CT_API_KEY environment variable is required');
+      throw new Error('CT_API_KEY environment variable is required for ConnectTeam notifications');
     }
     if (!CT_SENDER_ID) {
-      throw new Error('CT_SENDER_ID environment variable is required');
+      throw new Error('CT_SENDER_ID environment variable is required for ConnectTeam notifications');
     }
     
     this.headers = {
