@@ -33,8 +33,6 @@ curl -O https://raw.githubusercontent.com/msewell13/abs_scrape/main/install.js
 wget https://raw.githubusercontent.com/msewell13/abs_scrape/main/install.js
 ```
 
-> **Note:** Replace `your-username` with your actual GitHub username in the download link above.
-
 #### **📋 Step 2: Install Node.js (Required)**
 
 **Before running the installer, you need Node.js installed:**

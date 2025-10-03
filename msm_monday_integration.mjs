@@ -237,6 +237,15 @@ class MSMMondayIntegration {
     `;
     
     const data = await this.makeRequest(query);
+    
+    if (!data.boards || data.boards.length === 0) {
+      throw new Error(`Board with ID ${boardId} not found or no boards returned`);
+    }
+    
+    if (!data.boards[0].columns) {
+      throw new Error(`Board ${boardId} has no columns or columns property is missing`);
+    }
+    
     return data.boards[0].columns;
   }
 
@@ -316,11 +325,17 @@ class MSMMondayIntegration {
       }
       
       // Fallback to environment variable employee board ID
-      return process.env.EMPLOYEE_BOARD_ID || '18076293881';
+      if (!process.env.EMPLOYEE_BOARD_ID) {
+        throw new Error('EMPLOYEE_BOARD_ID environment variable is required');
+      }
+      return process.env.EMPLOYEE_BOARD_ID;
     } catch (error) {
       console.error('Error parsing employee column settings:', error.message);
       // Fallback to environment variable employee board ID
-      return process.env.EMPLOYEE_BOARD_ID || '18076293881';
+      if (!process.env.EMPLOYEE_BOARD_ID) {
+        throw new Error('EMPLOYEE_BOARD_ID environment variable is required');
+      }
+      return process.env.EMPLOYEE_BOARD_ID;
     }
   }
 
