@@ -20,7 +20,7 @@ class ConnectTeamIntegration {
     }
     
     this.headers = {
-      'Authorization': `Bearer ${CT_API_KEY}`,
+      'X-API-Key': CT_API_KEY,
       'Content-Type': 'application/json'
     };
   }
@@ -68,16 +68,12 @@ class ConnectTeamIntegration {
     const actEnd = shiftData['Actual End'] || 'Not recorded';
 
     // Format the message with variables
-    const message = `Hi, we have a documentation/records issue for your recent shift with ${client} on ${shiftDate} that we need your help to address.
+    const message = `There is a documentation issue with your shift for ${client} on ${shiftDate}:
 
-Can you please reply to this message with an explanation as to the issue(s) noted below?
-
-Shift issues are listed below:
+Shift issue(s):
 ${exceptions}
 
-Your shift was scheduled to start at ${schStart} and you clocked in at ${actStart}
-
-Your shift was scheduled to end at ${schEnd} and you clocked out at ${actEnd}`;
+Please call the office as soon as possible to discuss a solution for this. Thank you!`;
 
     return message;
   }
@@ -87,7 +83,7 @@ Your shift was scheduled to end at ${schEnd} and you clocked out at ${actEnd}`;
       const url = `${CONNECTEAM_API_URL}/chat/v1/conversations/privateMessage/${userId}`;
       
       const payload = {
-        message: message,
+        text: message,
         senderId: CT_SENDER_ID
       };
 

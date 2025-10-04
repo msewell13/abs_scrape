@@ -346,13 +346,15 @@ class MSMMondayIntegration {
       const query = `
         query {
           boards(ids: [${employeeBoardId}]) {
-            items {
-              id
-              name
-              column_values {
+            items_page(limit: 500) {
+              items {
                 id
-                text
-                value
+                name
+                column_values {
+                  id
+                  text
+                  value
+                }
               }
             }
           }
@@ -360,7 +362,7 @@ class MSMMondayIntegration {
       `;
       
       const data = await this.makeRequest(query);
-      const employeeItems = data.boards[0].items;
+      const employeeItems = data.boards[0].items_page.items;
       
       // Find the employee by name (same logic as findEmployeeItemId)
       let employee = employeeItems.find(item => item.name === employeeName);
@@ -383,7 +385,7 @@ class MSMMondayIntegration {
       }
       
       // Find CTUserId column
-      const ctUserIdColumn = employee.column_values.find(cv => cv.id.includes('CTUserId') || cv.text.includes('CTUserId'));
+      const ctUserIdColumn = employee.column_values.find(cv => cv.id === 'text_mkw92f6f');
       if (!ctUserIdColumn) {
         console.log(`No CTUserId column found for employee "${employeeName}"`);
         return null;
