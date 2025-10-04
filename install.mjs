@@ -204,12 +204,52 @@ async function setupRepository() {
   log.success('Repository setup complete');
 }
 
+// Fix npm permissions (Linux/macOS)
+async function fixNpmPermissions() {
+  const platform = process.platform;
+  
+  if (platform === 'linux' || platform === 'darwin') {
+    log.info('Checking npm permissions...');
+    
+    try {
+      // Try to fix npm cache permissions
+      const npmCacheDir = execSync('npm config get cache', { encoding: 'utf8' }).trim();
+      if (npmCacheDir && npmCacheDir !== 'undefined') {
+        log.info('Fixing npm cache permissions...');
+        execSync(`sudo chown -R $(id -u):$(id -g) "${npmCacheDir}"`, { stdio: 'inherit' });
+        log.success('npm cache permissions fixed');
+      }
+    } catch (error) {
+      log.warn('Could not fix npm permissions automatically');
+      log.info('If you encounter permission errors, run: sudo chown -R $(id -u):$(id -g) ~/.npm');
+    }
+  }
+}
+
 // Install dependencies
 async function installDependencies() {
   log.step('Installing dependencies...');
   
+  // Fix npm permissions first
+  await fixNpmPermissions();
+  
   log.info('Installing npm packages...');
-  execSync('npm install', { stdio: 'inherit' });
+  try {
+    execSync('npm install', { stdio: 'inherit' });
+  } catch (error) {
+    log.warn('npm install failed, trying with cache clean...');
+    try {
+      execSync('npm cache clean --force', { stdio: 'inherit' });
+      execSync('npm install', { stdio: 'inherit' });
+    } catch (retryError) {
+      log.error('npm install failed even after cache clean');
+      log.info('Please try running these commands manually:');
+      log.info('  sudo chown -R $(id -u):$(id -g) ~/.npm');
+      log.info('  npm cache clean --force');
+      log.info('  npm install');
+      throw retryError;
+    }
+  }
   
   log.info('Installing Playwright browsers...');
   execSync('npx playwright install chromium', { stdio: 'inherit' });
