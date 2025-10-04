@@ -276,6 +276,49 @@ async function setupMondayBoards() {
   }
 }
 
+// Set up automated scheduling
+async function setupScheduling(system) {
+  log.step('Setting up automated scheduling...');
+  
+  try {
+    if (system.os === 'windows') {
+      log.info('Installing Windows Task Scheduler tasks...');
+      execSync('node cron_scheduler.mjs --install-windows', { stdio: 'inherit' });
+      log.success('Windows Task Scheduler tasks installed successfully');
+      log.info('MSM scraper will run every 15 minutes');
+    } else if (system.os === 'macos' || system.os === 'linux') {
+      log.info('Making shell script executable...');
+      try {
+        chmodSync('cron_scheduler_mac.sh', '755');
+        log.info('Shell script is now executable');
+      } catch (error) {
+        log.warn('Could not make shell script executable (this is normal)');
+      }
+      
+      log.info('Installing cron jobs...');
+      execSync('./cron_scheduler_mac.sh install', { stdio: 'inherit' });
+      log.success('Cron jobs installed successfully');
+      log.info('MSM scraper will run every 15 minutes');
+    } else {
+      log.warn(`Scheduling not supported on ${system.os}`);
+      log.info('Please set up scheduling manually:');
+      if (system.os === 'windows') {
+        log.info('  npm run install-tasks');
+      } else {
+        log.info('  ./cron_scheduler_mac.sh install');
+      }
+    }
+  } catch (error) {
+    log.error('Failed to set up automated scheduling');
+    log.warn('You can set this up manually later:');
+    if (system.os === 'windows') {
+      log.info('  npm run install-tasks');
+    } else {
+      log.info('  ./cron_scheduler_mac.sh install');
+    }
+  }
+}
+
 // Test the installation
 async function testInstallation() {
   log.step('Testing installation...');
@@ -349,6 +392,7 @@ For more information, see the README.md file.
       const credentials = await getCredentials();
       await createEnvFile(credentials);
       await setupMondayBoards();
+      await setupScheduling(system);
       await testInstallation();
       
       log.title('🎉 Installation Complete!');
@@ -356,7 +400,7 @@ For more information, see the README.md file.
       log.info('\nNext steps:');
       log.info('1. Add some employees to your Monday.com Employees board');
       log.info('2. Test the scraper: npm run scrape-msm');
-      log.info('3. Set up scheduling: npm run install-tasks (Windows) or ./cron_scheduler_mac.sh install (Mac/Linux)');
+      log.info('3. The scraper is already scheduled to run every 15 minutes automatically!');
       log.info('\nFor more information, see the README.md file');
     }
     
