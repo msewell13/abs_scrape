@@ -287,9 +287,35 @@ async function getCredentials() {
     const absPass = await askQuestion(rl, 'ABS Password: ');
     const mondayToken = await askQuestion(rl, 'Monday.com API Token: ');
     
+    console.log('\n--- ConnectTeam Integration (Optional) ---');
+    console.log('ConnectTeam integration allows sending notifications to employees about shift issues.');
+    const enableConnectTeam = await askQuestion(rl, 'Enable ConnectTeam notifications? (y/n): ');
+    
+    let ctApiKey = '';
+    let ctSenderId = '';
+    let ctNotificationsEnabled = 'False';
+    
+    if (enableConnectTeam.toLowerCase() === 'y' || enableConnectTeam.toLowerCase() === 'yes') {
+      ctApiKey = await askQuestion(rl, 'ConnectTeam API Key: ');
+      ctSenderId = await askQuestion(rl, 'ConnectTeam Sender ID: ');
+      ctNotificationsEnabled = 'True';
+    }
+    
+    console.log('\n--- Call Logger Settings ---');
+    const callLoggerNotes = await askQuestion(rl, 'Enable Call Logger Notes? (y/n): ');
+    const callLoggerEnabled = (callLoggerNotes.toLowerCase() === 'y' || callLoggerNotes.toLowerCase() === 'yes') ? 'True' : 'False';
+    
     rl.close();
     
-    return { absUser, absPass, mondayToken };
+    return { 
+      absUser, 
+      absPass, 
+      mondayToken, 
+      ctApiKey, 
+      ctSenderId, 
+      ctNotificationsEnabled,
+      callLoggerEnabled 
+    };
   } catch (error) {
     rl.close();
     throw error;
@@ -311,9 +337,21 @@ MONDAY_SCHEDULE_BOARD_ID=your_schedule_board_id
 MONDAY_MSM_BOARD_ID=your_msm_board_id
 EMPLOYEE_BOARD_ID=your_employee_board_id
 
+# ConnectTeam API Configuration
+CT_API_KEY=${credentials.ctApiKey}
+CT_SENDER_ID=${credentials.ctSenderId}
+
 # Debug and Feature Flags
 DEBUG=False
-CALL_LOGGER_NOTES=True
+CALL_LOGGER_NOTES=${credentials.callLoggerEnabled}
+CT_NOTIFICATIONS_ENABLED=${credentials.ctNotificationsEnabled}
+
+# Instructions:
+# 1. Replace the placeholder values above with your actual Monday.com API token and board IDs
+# 2. Set DEBUG=True to run scrapers in visible browser mode, DEBUG=False for headless mode
+# 3. Set CALL_LOGGER_NOTES=True to log employee comments in call logger, CALL_LOGGER_NOTES=False to skip
+# 4. Set CT_NOTIFICATIONS_ENABLED=True to enable ConnectTeam notifications, CT_NOTIFICATIONS_ENABLED=False to disable
+# 5. EMPLOYEE_BOARD_ID is the Monday.com board ID for the employee lookup board
 `;
 
   writeFileSync('.env', envContent);
