@@ -21,16 +21,16 @@ Get the ABS scrapers up and running in just a few minutes! This guide will walk 
 **Download the installer script:**
 
 **Option 1: Direct Download**
-- **Click:** [install.js](https://raw.githubusercontent.com/msewell13/abs_scrape/main/install.js)
-- **Right-click** → **Save As** → Save as `install.js`
+- **Click:** [install.mjs](https://raw.githubusercontent.com/msewell13/abs_scrape/main/install.mjs)
+- **Right-click** → **Save As** → Save as `install.mjs`
 
 **Option 2: Command Line**
 ```bash
 # Using curl
-curl -O https://raw.githubusercontent.com/msewell13/abs_scrape/main/install.js
+curl -O https://raw.githubusercontent.com/msewell13/abs_scrape/main/install.mjs
 
 # Using wget
-wget https://raw.githubusercontent.com/msewell13/abs_scrape/main/install.js
+wget https://raw.githubusercontent.com/msewell13/abs_scrape/main/install.mjs
 ```
 
 #### **📋 Step 2: Install Node.js (Required)**
@@ -53,15 +53,15 @@ npm --version
 **Once Node.js is installed, run the installer:**
 
 ```bash
-# Navigate to where you saved install.js
+# Navigate to where you saved install.mjs
 cd /path/to/installer
 
 # Run the installer
-node install.js
+node install.mjs
 
 # Or with options
-node install.js --test    # Test mode (check requirements only)
-node install.js --help    # Show help and usage information
+node install.mjs --test    # Test mode (check requirements only)
+node install.mjs --help    # Show help and usage information
 ```
 
 #### **📋 What the Installer Does**

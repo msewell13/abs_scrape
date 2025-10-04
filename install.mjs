@@ -6,9 +6,9 @@
  * It combines the functionality of install.bat, install.sh, and install.mjs into one file.
  * 
  * Usage: 
- *   node install.js
- *   ./install.js (on Unix systems after making executable)
- *   install.js (on Windows)
+ *   node install.mjs
+ *   ./install.mjs (on Unix systems after making executable)
+ *   install.mjs (on Windows)
  */
 
 import { execSync, spawn } from 'child_process';
@@ -302,17 +302,17 @@ async function main() {
 This installer works on Windows, macOS, and Linux systems.
 
 Usage: 
-  node install.js [options]
-  ./install.js [options] (on Unix systems)
+  node install.mjs [options]
+  ./install.mjs [options] (on Unix systems)
 
 Options:
   --test    Run in test mode (skip credential collection and Monday.com setup)
   --help    Show this help message
 
 Examples:
-  node install.js           # Full installation with credential collection
-  node install.js --test    # Test mode - check requirements only
-  node install.js --help    # Show this help
+  node install.mjs           # Full installation with credential collection
+  node install.mjs --test    # Test mode - check requirements only
+  node install.mjs --help    # Show this help
 
 For more information, see the README.md file.
       `);
@@ -344,7 +344,7 @@ For more information, see the README.md file.
       log.info('✓ Install dependencies');
       log.info('✓ Skip credential collection');
       log.info('✓ Skip Monday.com board setup');
-      log.info('\nTo run the full installer, run: node install.js');
+      log.info('\nTo run the full installer, run: node install.mjs');
     } else {
       const credentials = await getCredentials();
       await createEnvFile(credentials);
