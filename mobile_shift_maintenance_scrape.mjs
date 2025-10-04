@@ -7,6 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { chromium } from 'playwright';
 import dotenv from 'dotenv';
+import { execSync } from 'child_process';
 import MSMMondayIntegration from './msm_monday_integration.mjs';
 
 // Load environment variables from .env file
@@ -37,6 +38,48 @@ function mmddyyyy(d) {
   const day = String(d.getDate()).padStart(2, '0');
   const y = d.getFullYear();
   return `${m}/${day}/${y}`;
+}
+
+// Update to latest version via git pull
+async function updateToLatestVersion() {
+  try {
+    console.log('🔄 Checking for updates...');
+    
+    // Check if we're in a git repository
+    try {
+      execSync('git status', { stdio: 'pipe' });
+    } catch (error) {
+      console.log('ℹ️ Not in a git repository, skipping update check');
+      return;
+    }
+    
+    // Fetch latest changes
+    execSync('git fetch origin', { stdio: 'pipe' });
+    
+    // Check if there are updates available
+    const localCommit = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
+    const remoteCommit = execSync('git rev-parse origin/main', { encoding: 'utf8' }).trim();
+    
+    if (localCommit === remoteCommit) {
+      console.log('✅ Already running latest version');
+      return;
+    }
+    
+    console.log('🔄 Updates available, pulling latest changes...');
+    
+    // Pull the latest changes
+    execSync('git pull origin main', { stdio: 'inherit' });
+    
+    console.log('✅ Successfully updated to latest version');
+    console.log('ℹ️ Restarting scraper with updated code...');
+    
+    // Restart the script with the updated code
+    process.exit(0);
+    
+  } catch (error) {
+    console.log('⚠️ Could not update to latest version:', error.message);
+    console.log('ℹ️ Continuing with current version...');
+  }
 }
 
 async function ensureAuthState() {
@@ -118,6 +161,9 @@ async function login(page, user, pass) {
 }
 
 async function run() {
+  // Check for updates and pull latest version
+  await updateToLatestVersion();
+  
   const browser = await chromium.launch({ 
     headless: process.env.DEBUG !== 'True', // Use DEBUG env var to control headless mode 
     args: ['--no-sandbox', '--disable-dev-shm-usage'] 
