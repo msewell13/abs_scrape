@@ -175,12 +175,30 @@ async function setupRepository() {
       log.warn('Could not update repository (this is normal if not a git repo)');
     }
   } else {
-    log.info('Please download the project files manually:');
-    log.info('1. Go to the project repository');
-    log.info('2. Download as ZIP or clone with git');
-    log.info('3. Extract to a folder');
-    log.info('4. Run this installer from within that folder');
-    process.exit(1);
+    log.info('Project files not found, cloning repository...');
+    
+    const repoUrl = 'https://github.com/msewell13/abs_scrape.git';
+    const projectDir = 'abs_scrape';
+    
+    try {
+      // Clone the repository
+      log.info(`Cloning repository from ${repoUrl}...`);
+      execSync(`git clone ${repoUrl} ${projectDir}`, { stdio: 'inherit' });
+      
+      // Change to the project directory
+      process.chdir(projectDir);
+      log.info(`Changed to project directory: ${process.cwd()}`);
+      
+      log.success('Repository cloned successfully');
+    } catch (error) {
+      log.error('Failed to clone repository');
+      log.info('Please download the project files manually:');
+      log.info('1. Go to https://github.com/msewell13/abs_scrape');
+      log.info('2. Download as ZIP or clone with git');
+      log.info('3. Extract to a folder');
+      log.info('4. Run this installer from within that folder');
+      process.exit(1);
+    }
   }
   
   log.success('Repository setup complete');
