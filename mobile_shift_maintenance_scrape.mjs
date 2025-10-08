@@ -609,8 +609,29 @@ async function run() {
         return exceptionType && exceptionType.trim() !== '';
       };
       
+      // Filter out "No Task List Submitted" records with "00:00" Actual End unless they have other exceptions
+      const shouldIncludeRecord = (obj) => {
+        const exceptionType = obj['Exception Type'] || obj['Exception Types'] || '';
+        const actualEnd = obj['Actual End'] || '';
+        
+        // If it's "No Task List Submitted" and Actual End is "00:00", check for other exceptions
+        if (exceptionType.includes('No Task List Submitted') && actualEnd === '00:00') {
+          // Check if there are other exceptions besides "No Task List Submitted"
+          const exceptions = exceptionType.split(',').map(e => e.trim());
+          const hasOtherExceptions = exceptions.some(exp => 
+            exp !== 'No Task List Submitted' && exp.trim() !== ''
+          );
+          
+          // Only include if there are other exceptions
+          return hasOtherExceptions;
+        }
+        
+        // Include all other records with exceptions
+        return true;
+      };
+      
       const hasAnyValue = (obj) => Object.values(obj).some(v => v != null && String(v).trim() !== '');
-      return mapped.filter(hasAnyValue).filter(hasException);
+      return mapped.filter(hasAnyValue).filter(hasException).filter(shouldIncludeRecord);
     }, { pickHeaders, headerMap });
   }
 
@@ -654,7 +675,27 @@ async function run() {
       
       // Check if this row has exceptions
       const exceptionType = rowData['Exception Type'] || rowData['Exception Types'] || '';
-      if (exceptionType && exceptionType.trim() !== '') {
+      const actualEnd = rowData['Actual End'] || '';
+      
+      // First check if it has any exceptions
+      if (!exceptionType || exceptionType.trim() === '') {
+        continue;
+      }
+      
+      // Filter out "No Task List Submitted" records with "00:00" Actual End unless they have other exceptions
+      let shouldInclude = true;
+      if (exceptionType.includes('No Task List Submitted') && actualEnd === '00:00') {
+        // Check if there are other exceptions besides "No Task List Submitted"
+        const exceptions = exceptionType.split(',').map(e => e.trim());
+        const hasOtherExceptions = exceptions.some(exp => 
+          exp !== 'No Task List Submitted' && exp.trim() !== ''
+        );
+        
+        // Only include if there are other exceptions
+        shouldInclude = hasOtherExceptions;
+      }
+      
+      if (shouldInclude) {
         // This is a row with exceptions, add it to our list
         rowData._domElement = tr;
         rowData._dataRowIndex = dataRowIndex;
@@ -1194,7 +1235,27 @@ async function run() {
     // Filter to only include records with exceptions and count them
     const pageRowsWithExceptions = allPageRows.filter(obj => {
       const exceptionType = obj['Exception Type'] || obj['Exception Types'] || '';
-      return exceptionType && exceptionType.trim() !== '';
+      const actualEnd = obj['Actual End'] || '';
+      
+      // First check if it has any exceptions
+      if (!exceptionType || exceptionType.trim() === '') {
+        return false;
+      }
+      
+      // Filter out "No Task List Submitted" records with "00:00" Actual End unless they have other exceptions
+      if (exceptionType.includes('No Task List Submitted') && actualEnd === '00:00') {
+        // Check if there are other exceptions besides "No Task List Submitted"
+        const exceptions = exceptionType.split(',').map(e => e.trim());
+        const hasOtherExceptions = exceptions.some(exp => 
+          exp !== 'No Task List Submitted' && exp.trim() !== ''
+        );
+        
+        // Only include if there are other exceptions
+        return hasOtherExceptions;
+      }
+      
+      // Include all other records with exceptions
+      return true;
     });
     
     // Use the new function that includes shift ID scraping
