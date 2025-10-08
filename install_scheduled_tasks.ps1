@@ -4,7 +4,8 @@
 param(
     [switch]$Force,
     [string]$ScheduleTime = "08:00",
-    [string]$MSMTime = "09:00"
+    [string]$MSMTime = "09:00",
+    [string]$MSMSchedule = $env:MSM_SCHEDULE ?? "daily"
 )
 
 Write-Host "ABS Scraper - Windows Task Scheduler Setup" -ForegroundColor Green
@@ -38,7 +39,8 @@ function Create-ScheduledTask {
         [string]$Command,
         [string]$Arguments,
         [string]$ScheduleTime,
-        [string]$Days = "MON,TUE,WED,THU,FRI"
+        [string]$Days = "MON,TUE,WED,THU,FRI",
+        [string]$ScheduleType = "Daily"
     )
     
     Write-Host "Creating task: $TaskName" -ForegroundColor Yellow
@@ -60,8 +62,12 @@ function Create-ScheduledTask {
         # Create the action
         $action = New-ScheduledTaskAction -Execute $Command -Argument $Arguments -WorkingDirectory $scriptDir
         
-        # Create the trigger (daily at specified time)
-        $trigger = New-ScheduledTaskTrigger -Daily -At $ScheduleTime
+        # Create the trigger based on schedule type
+        if ($ScheduleType -eq "Hourly") {
+            $trigger = New-ScheduledTaskTrigger -Once -At $ScheduleTime -RepetitionInterval (New-TimeSpan -Hours 1) -RepetitionDuration (New-TimeSpan -Days 365)
+        } else {
+            $trigger = New-ScheduledTaskTrigger -Daily -At $ScheduleTime
+        }
         
         # Create the settings with wake-up capabilities
         $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RunOnlyIfNetworkAvailable -WakeToRun
@@ -79,18 +85,28 @@ function Create-ScheduledTask {
     }
 }
 
+# Determine schedule based on environment variable
+$scheduleType = if ($MSMSchedule -eq "hourly") { "Hourly" } else { "Daily" }
+$scheduleDescription = if ($MSMSchedule -eq "hourly") { "Every hour starting at 9:00 AM" } else { "Daily at 9:00 AM" }
+
+Write-Host "MSM Schedule: $MSMSchedule ($scheduleDescription)" -ForegroundColor Cyan
+Write-Host ""
+
 # Create tasks
 Write-Host "Creating scheduled task..." -ForegroundColor Cyan
 Write-Host ""
 
-# Both Scrapers Task - Daily at midnight
-Create-ScheduledTask -TaskName "ABS-Both-Scrapers" -Description "Run both ABS scrapers with Monday.com sync" -Command $nodePath -Arguments "`"$cronScript`" --schedule-both" -ScheduleTime "00:00"
+# MSM Scraper Task
+Create-ScheduledTask -TaskName "ABS-MSM-Scraper" -Description "Run ABS Mobile Shift Maintenance scraper with Monday.com sync ($scheduleDescription)" -Command $nodePath -Arguments "`"$cronScript`" --schedule-msm" -ScheduleTime "09:00" -ScheduleType $scheduleType
 
 Write-Host ""
 Write-Host "Scheduled Task Installation Complete!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Created task:" -ForegroundColor Cyan
-Write-Host "- ABS-Both-Scrapers (Schedule: Daily at 00:00)" -ForegroundColor White
+Write-Host "- ABS-MSM-Scraper (Schedule: $scheduleDescription)" -ForegroundColor White
+Write-Host ""
+Write-Host "Environment Variable:" -ForegroundColor Cyan
+Write-Host "- MSM_SCHEDULE=$MSMSchedule" -ForegroundColor White
 Write-Host ""
 Write-Host "To manage tasks:" -ForegroundColor Cyan
 Write-Host "- Open Task Scheduler (taskschd.msc)" -ForegroundColor White
@@ -98,4 +114,4 @@ Write-Host "- Look for 'ABS-*' tasks in the Task Scheduler Library" -ForegroundC
 Write-Host ""
 Write-Host "To test tasks manually:" -ForegroundColor Cyan
 Write-Host "- Right-click task → Run" -ForegroundColor White
-Write-Host "- Or run: node cron_scheduler.mjs --schedule-schedule" -ForegroundColor White
+Write-Host "- Or run: node cron_scheduler.mjs --schedule-msm" -ForegroundColor White

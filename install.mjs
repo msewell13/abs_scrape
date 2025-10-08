@@ -305,6 +305,13 @@ async function getCredentials() {
     const callLoggerNotes = await askQuestion(rl, 'Enable Call Logger Notes? (y/n): ');
     const callLoggerEnabled = (callLoggerNotes.toLowerCase() === 'y' || callLoggerNotes.toLowerCase() === 'yes') ? 'True' : 'False';
     
+    console.log('\n--- Schedule Configuration ---');
+    console.log('How often should the MSM scraper run?');
+    console.log('  daily  - Run once per day at 9:00 AM (recommended)');
+    console.log('  hourly - Run every hour starting at 9:00 AM');
+    const scheduleChoice = await askQuestion(rl, 'Choose schedule (daily/hourly) [daily]: ');
+    const msmSchedule = scheduleChoice.toLowerCase() === 'hourly' ? 'hourly' : 'daily';
+    
     rl.close();
     
     return { 
@@ -314,7 +321,8 @@ async function getCredentials() {
       ctApiKey, 
       ctSenderId, 
       ctNotificationsEnabled,
-      callLoggerEnabled 
+      callLoggerEnabled,
+      msmSchedule
     };
   } catch (error) {
     rl.close();
@@ -346,12 +354,16 @@ DEBUG=False
 CALL_LOGGER_NOTES=${credentials.callLoggerEnabled}
 CT_NOTIFICATIONS_ENABLED=${credentials.ctNotificationsEnabled}
 
+# Schedule Configuration
+MSM_SCHEDULE=${credentials.msmSchedule}
+
 # Instructions:
 # 1. Replace the placeholder values above with your actual Monday.com API token and board IDs
 # 2. Set DEBUG=True to run scrapers in visible browser mode, DEBUG=False for headless mode
 # 3. Set CALL_LOGGER_NOTES=True to log employee comments in call logger, CALL_LOGGER_NOTES=False to skip
 # 4. Set CT_NOTIFICATIONS_ENABLED=True to enable ConnectTeam notifications, CT_NOTIFICATIONS_ENABLED=False to disable
 # 5. EMPLOYEE_BOARD_ID is the Monday.com board ID for the employee lookup board
+# 6. MSM_SCHEDULE controls how often the scraper runs: 'daily' (9:00 AM) or 'hourly' (every hour)
 `;
 
   writeFileSync('.env', envContent);
@@ -395,15 +407,17 @@ async function syncEmployees() {
 }
 
 // Set up automated scheduling
-async function setupScheduling(system) {
+async function setupScheduling(system, msmSchedule) {
   log.step('Setting up automated scheduling...');
   
   try {
     if (system.os === 'windows') {
       log.info('Installing Windows Task Scheduler tasks...');
-      execSync('node cron_scheduler.mjs --install-windows', { stdio: 'inherit' });
+      // Set the environment variable and run the installer
+      const env = { ...process.env, MSM_SCHEDULE: msmSchedule };
+      execSync('node cron_scheduler.mjs --install-windows', { stdio: 'inherit', env });
       log.success('Windows Task Scheduler tasks installed successfully');
-      log.info('MSM scraper will run every 15 minutes');
+      log.info(`MSM scraper will run ${msmSchedule === 'hourly' ? 'every hour' : 'daily at 9:00 AM'}`);
     } else if (system.os === 'macos' || system.os === 'linux') {
       log.info('Making shell script executable...');
       try {
@@ -414,9 +428,11 @@ async function setupScheduling(system) {
       }
       
       log.info('Installing cron jobs...');
-      execSync('./cron_scheduler_mac.sh install', { stdio: 'inherit' });
+      // Set the environment variable and run the installer
+      const env = { ...process.env, MSM_SCHEDULE: msmSchedule };
+      execSync('./cron_scheduler_mac.sh install', { stdio: 'inherit', env });
       log.success('Cron jobs installed successfully');
-      log.info('MSM scraper will run every 15 minutes');
+      log.info(`MSM scraper will run ${msmSchedule === 'hourly' ? 'every hour' : 'daily at 9:00 AM'}`);
     } else {
       log.warn(`Scheduling not supported on ${system.os}`);
       log.info('Please set up scheduling manually:');
@@ -510,7 +526,7 @@ For more information, see the README.md file.
       const credentials = await getCredentials();
       await createEnvFile(credentials);
       await setupMondayBoards();
-      await setupScheduling(system);
+      await setupScheduling(system, credentials.msmSchedule);
       await testInstallation();
       
       log.title('🎉 Installation Complete!');
@@ -518,7 +534,7 @@ For more information, see the README.md file.
       log.info('\nNext steps:');
       log.info('1. Add some employees to your Monday.com Employees board');
       log.info('2. Test the scraper: npm run scrape-msm');
-      log.info('3. The scraper is already scheduled to run every 15 minutes automatically!');
+      log.info(`3. The scraper is already scheduled to run ${credentials.msmSchedule === 'hourly' ? 'every hour' : 'daily at 9:00 AM'} automatically!`);
       log.info('\nFor more information, see the README.md file');
     }
     

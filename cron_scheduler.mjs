@@ -32,7 +32,9 @@ const CONFIG = {
   retries: 3,
   retryDelay: 5000, // 5 seconds
   wakeUpDelay: 30000, // 30 seconds to wake up
-  maxWakeUpAttempts: 3 // Try to wake up 3 times
+  maxWakeUpAttempts: 3, // Try to wake up 3 times
+  // Schedule configuration from environment variable
+  msmSchedule: process.env.MSM_SCHEDULE || 'daily' // 'daily' or 'hourly'
 };
 
 class CronScheduler {
@@ -126,27 +128,47 @@ class CronScheduler {
     const scriptPath = path.join(__dirname, 'cron_scheduler.mjs');
     const nodePath = process.execPath;
     
+    // Determine schedule based on environment variable
+    let scheduleType, scheduleValue, scheduleDescription;
+    if (CONFIG.msmSchedule === 'hourly') {
+      scheduleType = 'minute';
+      scheduleValue = '60';
+      scheduleDescription = 'every hour';
+    } else { // default to daily
+      scheduleType = 'daily';
+      scheduleValue = '1';
+      scheduleDescription = 'daily at 9:00 AM';
+    }
+    
     const tasks = [
       {
         name: 'ABS-MSM-Scraper',
-        description: 'Run ABS Mobile Shift Maintenance scraper with Monday.com sync',
+        description: `Run ABS Mobile Shift Maintenance scraper with Monday.com sync (${scheduleDescription})`,
         command: `"${nodePath}" "${scriptPath}" --schedule-msm`,
-        schedule: '*/15 * * * *' // Every 15 minutes
+        scheduleType: scheduleType,
+        scheduleValue: scheduleValue
       }
     ];
 
     for (const task of tasks) {
       try {
-        // Create the task with minute-based schedule
-        const createCommand = `schtasks /create /tn "${task.name}" /tr "${task.command}" /sc minute /mo 15 /f`;
+        let createCommand;
+        // Properly escape the command for Windows Task Scheduler
+        const escapedCommand = task.command.replace(/"/g, '\\"');
+        if (scheduleType === 'minute') {
+          createCommand = `schtasks /create /tn "${task.name}" /tr "${escapedCommand}" /sc ${scheduleType} /mo ${scheduleValue} /f`;
+        } else {
+          createCommand = `schtasks /create /tn "${task.name}" /tr "${escapedCommand}" /sc ${scheduleType} /f`;
+        }
+        
         await execAsync(createCommand);
-        this.log(`Created Windows task: ${task.name} (every 15 minutes)`);
+        this.log(`Created Windows task: ${task.name} (${scheduleDescription})`);
       } catch (error) {
         this.log(`Failed to create task ${task.name}: ${error.message}`, 'ERROR');
       }
     }
     
-    this.log('Windows Task Scheduler setup completed');
+    this.log(`Windows Task Scheduler setup completed (MSM_SCHEDULE=${CONFIG.msmSchedule})`);
   }
 
   async wakeUpComputer() {
@@ -275,12 +297,18 @@ Usage:
   node cron_scheduler.mjs --schedule-msm         # Run MSM scraper  
   node cron_scheduler.mjs --install-windows      # Install Windows Task Scheduler tasks
 
+Environment Variables:
+  MSM_SCHEDULE=daily|hourly                      # Set schedule frequency (default: daily)
+
 Examples:
   # Run MSM scraper now
   node cron_scheduler.mjs --schedule-msm
   
-  # Install Windows scheduled tasks (runs every 15 minutes)
-  node cron_scheduler.mjs --install-windows
+  # Install Windows scheduled tasks (daily at 9:00 AM)
+  MSM_SCHEDULE=daily node cron_scheduler.mjs --install-windows
+  
+  # Install Windows scheduled tasks (every hour)
+  MSM_SCHEDULE=hourly node cron_scheduler.mjs --install-windows
         `);
         break;
     }

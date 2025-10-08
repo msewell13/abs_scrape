@@ -18,6 +18,9 @@ RETRY_DELAY=5
 WAKE_UP_DELAY=30  # 30 seconds to wake up
 MAX_WAKE_UP_ATTEMPTS=3
 
+# Schedule configuration from environment variable
+MSM_SCHEDULE="${MSM_SCHEDULE:-daily}"  # 'daily' or 'hourly', default to 'daily'
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -155,10 +158,21 @@ install_cron() {
     
     local cron_script="$SCRIPT_DIR/cron_scheduler_mac.sh"
     
+    # Determine schedule based on environment variable
+    local cron_schedule
+    local schedule_description
+    if [ "$MSM_SCHEDULE" = "hourly" ]; then
+        cron_schedule="0 * * * *"
+        schedule_description="Every hour"
+    else  # default to daily
+        cron_schedule="0 9 * * *"
+        schedule_description="Daily at 9:00 AM"
+    fi
+    
     # Create cron entries
     local cron_entries=(
-        "# ABS Mobile Shift Maintenance Scraper - Every 15 minutes"
-        "*/15 * * * * cd $SCRIPT_DIR && $cron_script msm >> $LOG_DIR/cron-msm.log 2>&1"
+        "# ABS Mobile Shift Maintenance Scraper - $schedule_description"
+        "$cron_schedule cd $SCRIPT_DIR && $cron_script msm >> $LOG_DIR/cron-msm.log 2>&1"
     )
     
     # Check if cron jobs already exist
@@ -175,7 +189,7 @@ install_cron() {
     
     if [ $? -eq 0 ]; then
         log "INFO" "✅ Cron job installed successfully"
-        log "INFO" "MSM Scraper: Every 15 minutes"
+        log "INFO" "MSM Scraper: $schedule_description (MSM_SCHEDULE=$MSM_SCHEDULE)"
         log "INFO" "Logs: $LOG_DIR/"
     else
         log "ERROR" "❌ Failed to install cron job"
@@ -209,12 +223,18 @@ show_usage() {
     echo "  $0 install     # Install cron jobs"
     echo "  $0 uninstall   # Remove cron jobs"
     echo ""
+    echo "Environment Variables:"
+    echo "  MSM_SCHEDULE=daily|hourly    # Set schedule frequency (default: daily)"
+    echo ""
     echo "Examples:"
     echo "  # Run MSM scraper now"
     echo "  $0 msm"
     echo ""
-    echo "  # Install cron jobs (runs every 15 minutes)"
-    echo "  $0 install"
+    echo "  # Install cron jobs (daily at 9:00 AM)"
+    echo "  MSM_SCHEDULE=daily $0 install"
+    echo ""
+    echo "  # Install cron jobs (every hour)"
+    echo "  MSM_SCHEDULE=hourly $0 install"
     echo ""
     echo "  # View cron jobs"
     echo "  crontab -l"
