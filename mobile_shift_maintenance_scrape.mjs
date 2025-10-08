@@ -40,6 +40,23 @@ function mmddyyyy(d) {
   return `${m}/${day}/${y}`;
 }
 
+// Sync employees from ConnectTeam to Monday.com at the start of scraping
+async function syncEmployeesAtStart() {
+  try {
+    console.log('🔄 Syncing employees from ConnectTeam to Monday.com...');
+    
+    // Import the employee sync module
+    const { default: EmployeeSync } = await import('./employee_sync.mjs');
+    const employeeSync = new EmployeeSync();
+    
+    const result = await employeeSync.syncEmployees();
+    console.log(`✅ Employee sync completed: ${result.created} created, ${result.updated} updated, ${result.errors} errors`);
+  } catch (error) {
+    console.log('⚠️ Employee sync failed:', error.message);
+    console.log('Continuing with scraping...');
+  }
+}
+
 // Update to latest version via git pull
 async function updateToLatestVersion() {
   try {
@@ -163,6 +180,9 @@ async function login(page, user, pass) {
 async function run() {
   // Check for updates and pull latest version
   await updateToLatestVersion();
+  
+  // Sync employees from ConnectTeam to Monday.com at the beginning
+  await syncEmployeesAtStart();
   
   const browser = await chromium.launch({ 
     headless: process.env.DEBUG !== 'True', // Use DEBUG env var to control headless mode 

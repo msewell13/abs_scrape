@@ -773,6 +773,9 @@ class MSMMondayIntegration {
   }
 
   async updateItem(boardId, itemId, itemData, columns) {
+    // Get current item data to compare changes
+    const currentItemData = await this.getItemData(boardId, itemId, columns);
+    
     // Get employee board ID for board_relation column
     const employeeColumn = columns.find(col => col.title === 'Employee');
     let employeeBoardId = null;
@@ -780,8 +783,9 @@ class MSMMondayIntegration {
       employeeBoardId = await this.getEmployeeBoardId(employeeColumn);
     }
     
-    // Map data to column values
+    // Map data to column values and check for changes
     const columnValues = {};
+    let hasChanges = false;
     
     for (const [key, value] of Object.entries(itemData)) {
       const column = columns.find(col => col.title === key);
@@ -808,9 +812,22 @@ class MSMMondayIntegration {
           continue;
         }
         
-        columnValues[column.id] = columnValue;
+        // Check if value has changed
+        const currentValue = currentItemData[key];
+        if (this.hasValueChanged(currentValue, columnValue, column.type)) {
+          columnValues[column.id] = columnValue;
+          hasChanges = true;
+        }
       }
     }
+
+    // Only update if there are actual changes
+    if (!hasChanges) {
+      console.log(`   ⏭️  No changes detected for Shift ID ${itemData['Shift ID']}`);
+      return null;
+    }
+
+    console.log(`   🔍 Changes detected for Shift ID ${itemData['Shift ID']}, updating...`);
 
     // Use variables to avoid GraphQL syntax issues
     const variables = {
@@ -833,8 +850,6 @@ class MSMMondayIntegration {
     
     const data = await this.makeRequest(query, variables);
     
-    // Exception Types are now handled directly in the main column processing
-    
     // Update Employee board-relation separately if needed
     if (itemData['Employee']) {
       const employeeColumn = columns.find(col => col.title === 'Employee');
@@ -847,6 +862,87 @@ class MSMMondayIntegration {
     }
     
     return data.change_multiple_column_values;
+  }
+
+  async getItemData(boardId, itemId, columns) {
+    const query = `
+      query GetItem($itemId: ID!) {
+        items(ids: [$itemId]) {
+          id
+          name
+          column_values {
+            id
+            text
+            value
+          }
+        }
+      }
+    `;
+
+    const data = await this.makeRequest(query, { itemId });
+    const item = data.items[0];
+    
+    if (!item) {
+      return {};
+    }
+
+    // Convert column values to a more usable format
+    const itemData = {};
+    columns.forEach(column => {
+      const columnValue = item.column_values.find(cv => cv.id === column.id);
+      if (columnValue) {
+        let value = columnValue.text;
+        
+        // Handle special column types
+        if (column.type === 'checkbox') {
+          // Parse checkbox value
+          try {
+            const parsed = JSON.parse(columnValue.value || '{}');
+            value = parsed.checked === 'true' || parsed.checked === true;
+          } catch {
+            value = columnValue.text === 'true' || columnValue.text === '1';
+          }
+        } else if (column.type === 'date') {
+          value = columnValue.text;
+        } else if (column.type === 'text' || column.type === 'long_text') {
+          value = columnValue.text;
+        } else if (column.type === 'board_relation') {
+          // For board relations, we'll get the text representation
+          value = columnValue.text;
+        }
+        
+        itemData[column.title] = value;
+      }
+    });
+
+    return itemData;
+  }
+
+  hasValueChanged(currentValue, newValue, columnType) {
+    // Helper function to normalize values for comparison
+    const normalizeValue = (value) => {
+      if (value === null || value === undefined || value === '' || value === 'undefined') {
+        return null;
+      }
+      return value;
+    };
+
+    const normalizedCurrent = normalizeValue(currentValue);
+    const normalizedNew = normalizeValue(newValue);
+
+    // Special handling for different column types
+    if (columnType === 'checkbox') {
+      // For checkboxes, compare boolean values
+      const currentBool = normalizedCurrent === true || normalizedCurrent === 'true' || normalizedCurrent === 1;
+      const newBool = normalizedNew === true || normalizedNew === 'true' || normalizedNew === 1;
+      return currentBool !== newBool;
+    } else if (columnType === 'date') {
+      // For dates, compare string representations
+      return normalizedCurrent !== normalizedNew;
+    } else {
+      // For text and other types, direct comparison
+      return normalizedCurrent !== normalizedNew;
+    }
   }
 
   async updateCommentsLoggedStatus(records) {
@@ -1064,6 +1160,7 @@ class MSMMondayIntegration {
       // Process records: update existing or create new
       let updatedCount = 0;
       let createdCount = 0;
+      let skippedCount = 0;
       let failedCount = 0;
 
       console.log(`Processing ${records.length} scraped records...`);
@@ -1095,9 +1192,14 @@ class MSMMondayIntegration {
             // Set CommentsLogged based on whether the comment was successfully logged
             record.CommentsLogged = record.CommentsLogged || false;
             
-            await this.updateItem(board.id, itemId, record, columns);
-            updatedCount++;
-            console.log(`✓ Updated item for Shift ID ${shiftId}`);
+            const updateResult = await this.updateItem(board.id, itemId, record, columns);
+            if (updateResult) {
+              updatedCount++;
+              console.log(`✓ Updated item for Shift ID ${shiftId}`);
+            } else {
+              skippedCount++;
+              console.log(`⏭️  Skipped item for Shift ID ${shiftId} (no changes)`);
+            }
           } else {
             // Create new item
             const itemName = record.Date || 'New Shift';
@@ -1163,6 +1265,7 @@ class MSMMondayIntegration {
       console.log(`\nMSM Sync completed:`);
       console.log(`- Items updated: ${updatedCount}`);
       console.log(`- Items created: ${createdCount}`);
+      console.log(`- Items skipped: ${skippedCount}`);
       console.log(`- Items failed: ${failedCount}`);
       console.log(`- Orphaned records deleted: ${orphanedItems.length}`);
       console.log(`- Total processed: ${records.length}`);

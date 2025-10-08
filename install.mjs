@@ -366,9 +366,31 @@ async function setupMondayBoards() {
   try {
     execSync('npm run setup-boards', { stdio: 'inherit' });
     log.success('Monday.com boards created successfully');
+    
+    // Run employee sync after board creation
+    await syncEmployees();
   } catch (error) {
     log.error('Failed to create Monday.com boards');
     log.warn('You can run this manually later with: npm run setup-boards');
+  }
+}
+
+// Sync employees from ConnectTeam to Monday.com
+async function syncEmployees() {
+  log.step('Syncing employees from ConnectTeam to Monday.com...');
+  
+  try {
+    // Import the employee sync module
+    const { default: EmployeeSync } = await import('./employee_sync.mjs');
+    const employeeSync = new EmployeeSync();
+    
+    log.info('Starting employee synchronization...');
+    const result = await employeeSync.syncEmployees();
+    
+    log.success(`Employee sync completed: ${result.created} created, ${result.updated} updated, ${result.errors} errors`);
+  } catch (error) {
+    log.error('Employee sync failed:', error.message);
+    log.warn('You can run employee sync manually later');
   }
 }
 
