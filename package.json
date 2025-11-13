@@ -5,11 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "setup-boards": "node setup_monday_boards.mjs",
     "scrape-msm": "node mobile_shift_maintenance_scrape.mjs",
-    "scrape-msm-monday": "node mobile_shift_maintenance_scrape.mjs",
-    "sync-msm-monday": "node msm_monday_integration.mjs",
-    "sync-employees": "node sync_employees.mjs",
+    "scrape-schedule": "node schedule_scrape.mjs",
     "cron-msm": "node cron_scheduler.mjs --schedule-msm",
     "install-tasks": "powershell -ExecutionPolicy Bypass -File install_scheduled_tasks.ps1",
     "cron-msm-mac": "./cron_scheduler_mac.sh msm",

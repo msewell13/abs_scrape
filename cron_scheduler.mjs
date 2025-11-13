@@ -143,7 +143,7 @@ class CronScheduler {
     const tasks = [
       {
         name: 'ABS-MSM-Scraper',
-        description: `Run ABS Mobile Shift Maintenance scraper with Monday.com sync (${scheduleDescription})`,
+        description: `Run ABS Mobile Shift Maintenance scraper (${scheduleDescription})`,
         command: `"${nodePath}" "${scriptPath}" --schedule-msm`,
         scheduleType: scheduleType,
         scheduleValue: scheduleValue

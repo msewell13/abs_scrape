@@ -285,25 +285,6 @@ async function getCredentials() {
     
     const absUser = await askQuestion(rl, 'ABS Username: ');
     const absPass = await askQuestion(rl, 'ABS Password: ');
-    const mondayToken = await askQuestion(rl, 'Monday.com API Token: ');
-    
-    console.log('\n--- ConnectTeam Integration (Optional) ---');
-    console.log('ConnectTeam integration allows sending notifications to employees about shift issues.');
-    const enableConnectTeam = await askQuestion(rl, 'Enable ConnectTeam notifications? (y/n): ');
-    
-    let ctApiKey = '';
-    let ctSenderId = '';
-    let ctNotificationsEnabled = 'False';
-    
-    if (enableConnectTeam.toLowerCase() === 'y' || enableConnectTeam.toLowerCase() === 'yes') {
-      ctApiKey = await askQuestion(rl, 'ConnectTeam API Key: ');
-      ctSenderId = await askQuestion(rl, 'ConnectTeam Sender ID: ');
-      ctNotificationsEnabled = 'True';
-    }
-    
-    console.log('\n--- Call Logger Settings ---');
-    const callLoggerNotes = await askQuestion(rl, 'Enable Call Logger Notes? (y/n): ');
-    const callLoggerEnabled = (callLoggerNotes.toLowerCase() === 'y' || callLoggerNotes.toLowerCase() === 'yes') ? 'True' : 'False';
     
     console.log('\n--- Schedule Configuration ---');
     console.log('How often should the MSM scraper run?');
@@ -317,11 +298,6 @@ async function getCredentials() {
     return { 
       absUser, 
       absPass, 
-      mondayToken, 
-      ctApiKey, 
-      ctSenderId, 
-      ctNotificationsEnabled,
-      callLoggerEnabled,
       msmSchedule
     };
   } catch (error) {
@@ -339,72 +315,23 @@ ABS_USER=${credentials.absUser}
 ABS_PASS=${credentials.absPass}
 ABS_LOGIN_URL=https://abs.brightstarcare.com/Account/Login
 
-# Monday.com Integration
-MONDAY_API_TOKEN=${credentials.mondayToken}
-MONDAY_SCHEDULE_BOARD_ID=your_schedule_board_id
-MONDAY_MSM_BOARD_ID=your_msm_board_id
-EMPLOYEE_BOARD_ID=your_employee_board_id
-
-# ConnectTeam API Configuration
-CT_API_KEY=${credentials.ctApiKey}
-CT_SENDER_ID=${credentials.ctSenderId}
-
-# Debug and Feature Flags
+# Debug Flag
 DEBUG=False
-CALL_LOGGER_NOTES=${credentials.callLoggerEnabled}
-CT_NOTIFICATIONS_ENABLED=${credentials.ctNotificationsEnabled}
 
 # Schedule Configuration
 MSM_SCHEDULE=${credentials.msmSchedule}
 
 # Instructions:
-# 1. Replace the placeholder values above with your actual Monday.com API token and board IDs
-# 2. Set DEBUG=True to run scrapers in visible browser mode, DEBUG=False for headless mode
-# 3. Set CALL_LOGGER_NOTES=True to log employee comments in call logger, CALL_LOGGER_NOTES=False to skip
-# 4. Set CT_NOTIFICATIONS_ENABLED=True to enable ConnectTeam notifications, CT_NOTIFICATIONS_ENABLED=False to disable
-# 5. EMPLOYEE_BOARD_ID is the Monday.com board ID for the employee lookup board
-# 6. MSM_SCHEDULE controls how often the scraper runs: 'daily' (9:00 AM) or 'hourly' (every hour)
+# 1. Set DEBUG=True to run scrapers in visible browser mode, DEBUG=False for headless mode
+# 2. MSM_SCHEDULE controls how often the scraper runs: 'daily' (9:00 AM) or 'hourly' (every hour)
+# 3. Scraped data will be saved to msm_results.json and msm_results.csv
+# 4. You can integrate this data with third-party tools like n8n, Zapier, or Grist
 `;
 
   writeFileSync('.env', envContent);
   log.success('.env file created successfully');
 }
 
-// Run Monday.com board setup
-async function setupMondayBoards() {
-  log.step('Setting up Monday.com boards...');
-  
-  log.info('Running automated board setup...');
-  try {
-    execSync('npm run setup-boards', { stdio: 'inherit' });
-    log.success('Monday.com boards created successfully');
-    
-    // Run employee sync after board creation
-    await syncEmployees();
-  } catch (error) {
-    log.error('Failed to create Monday.com boards');
-    log.warn('You can run this manually later with: npm run setup-boards');
-  }
-}
-
-// Sync employees from ConnectTeam to Monday.com
-async function syncEmployees() {
-  log.step('Syncing employees from ConnectTeam to Monday.com...');
-  
-  try {
-    // Import the employee sync module
-    const { default: EmployeeSync } = await import('./employee_sync.mjs');
-    const employeeSync = new EmployeeSync();
-    
-    log.info('Starting employee synchronization...');
-    const result = await employeeSync.syncEmployees();
-    
-    log.success(`Employee sync completed: ${result.created} created, ${result.updated} updated, ${result.errors} errors`);
-  } catch (error) {
-    log.error('Employee sync failed:', error.message);
-    log.warn('You can run employee sync manually later');
-  }
-}
 
 // Set up automated scheduling
 async function setupScheduling(system, msmSchedule) {
@@ -483,7 +410,7 @@ Usage:
   ./install.mjs [options] (on Unix systems)
 
 Options:
-  --test    Run in test mode (skip credential collection and Monday.com setup)
+  --test    Run in test mode (skip credential collection)
   --help    Show this help message
 
 Examples:
@@ -520,21 +447,20 @@ For more information, see the README.md file.
       log.info('✓ Check system requirements');
       log.info('✓ Install dependencies');
       log.info('✓ Skip credential collection');
-      log.info('✓ Skip Monday.com board setup');
       log.info('\nTo run the full installer, run: node install.mjs');
     } else {
       const credentials = await getCredentials();
       await createEnvFile(credentials);
-      await setupMondayBoards();
       await setupScheduling(system, credentials.msmSchedule);
       await testInstallation();
       
       log.title('🎉 Installation Complete!');
       log.success('Your ABS scraper is now installed and configured!');
       log.info('\nNext steps:');
-      log.info('1. Add some employees to your Monday.com Employees board');
-      log.info('2. Test the scraper: npm run scrape-msm');
-      log.info(`3. The scraper is already scheduled to run ${credentials.msmSchedule === 'hourly' ? 'every hour' : 'daily at 9:00 AM'} automatically!`);
+      log.info('1. Test the scraper: npm run scrape-msm');
+      log.info(`2. The scraper is already scheduled to run ${credentials.msmSchedule === 'hourly' ? 'every hour' : 'daily at 9:00 AM'} automatically!`);
+      log.info('3. Scraped data will be saved to msm_results.json and msm_results.csv');
+      log.info('4. You can integrate this data with third-party tools like n8n, Zapier, or Grist');
       log.info('\nFor more information, see the README.md file');
     }
     

@@ -27,8 +27,6 @@ class DataViewer {
       console.log(`   Email: ${emp.email || 'No email'}`);
       console.log(`   Phone: ${emp.phone || 'No phone'}`);
       console.log(`   Position: ${emp.position || 'No position'}`);
-      console.log(`   ConnectTeam ID: ${emp.connectteam_user_id || 'No CT ID'}`);
-      console.log(`   Monday ID: ${emp.monday_item_id || 'No Monday ID'}`);
       console.log('');
     });
     
@@ -48,7 +46,6 @@ class DataViewer {
       console.log(`   Actual: ${shift.actual_start || 'N/A'} - ${shift.actual_end || 'N/A'}`);
       console.log(`   Exceptions: ${shift.exception_types || 'None'}`);
       console.log(`   Comments: ${shift.comments || 'None'}`);
-      console.log(`   Monday ID: ${shift.monday_item_id || 'Not synced'}`);
       console.log('');
     });
     

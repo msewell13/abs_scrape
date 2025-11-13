@@ -97,7 +97,7 @@ Write-Host "Creating scheduled task..." -ForegroundColor Cyan
 Write-Host ""
 
 # MSM Scraper Task
-Create-ScheduledTask -TaskName "ABS-MSM-Scraper" -Description "Run ABS Mobile Shift Maintenance scraper with Monday.com sync ($scheduleDescription)" -Command $nodePath -Arguments "`"$cronScript`" --schedule-msm" -ScheduleTime "09:00" -ScheduleType $scheduleType
+Create-ScheduledTask -TaskName "ABS-MSM-Scraper" -Description "Run ABS Mobile Shift Maintenance scraper ($scheduleDescription)" -Command $nodePath -Arguments "`"$cronScript`" --schedule-msm" -ScheduleTime "09:00" -ScheduleType $scheduleType
 
 Write-Host ""
 Write-Host "Scheduled Task Installation Complete!" -ForegroundColor Green

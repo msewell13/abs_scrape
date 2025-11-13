@@ -1,11 +1,13 @@
-# ABS Mobile Shift Maintenance Scraper
+# ABS Portal Scrapers
 
-This repo contains a Playwright-based scraper for the ABS portal:
+This repo contains Playwright-based scrapers for the ABS portal:
 - `mobile_shift_maintenance_scrape.mjs`: scrapes the Mobile Shift Maintenance grid
-- Sends data directly to Monday.com
-- Runs automatically every 15 minutes via cron job
+  - Outputs to: `msm_results.json` and `msm_results.csv`
+- `schedule_scrape.mjs`: scrapes the Schedule Master (Month Block View)
+  - Outputs to: `month_block.json` and `month_block.csv`
+- Runs automatically on a schedule via cron job (optional)
 
-The scraper loads credentials from a `.env` file and saves a reusable Playwright `storageState.json` after login.
+The scrapers load credentials from a `.env` file and save a reusable Playwright `storageState.json` after login. Scraped data can be integrated with third-party tools like n8n, Zapier, or Grist.
 
 
 ## 🚀 Quick Start Guide
@@ -72,7 +74,6 @@ The installer will:
 - ✅ Download the latest code
 - ✅ Install all dependencies
 - ✅ Ask for your credentials
-- ✅ Set up Monday.com boards automatically
 - ✅ Test the installation
 
 **That's it!** The installer handles everything automatically.
@@ -110,63 +111,44 @@ If you prefer to set up manually or the automated installer doesn't work:
    ```
    (On Mac/Linux: `cp .env.sample .env`)
 
-2. Open the `.env` file in a text editor and fill in your abs username/password
+2. Open the `.env` file in a text editor and fill in your ABS username and password
 
-### Step 5: Get Your Monday.com API Token
-1. Go to [Monday.com](https://monday.com) and log in
-2. Click your profile picture (top right) → **Developers**
-3. Click **Generate new token**
-4. Give it a name like "ABS Scraper"
-5. Copy the token and paste it in your `.env` file
+### Step 5: Test the Scrapers
+Run the scrapers to test everything:
 
-### Step 6: Create Your Monday.com Boards
-Run this command to automatically create all the boards you need (the script will automatically add the board id's to your .env file):
-```bash
-npm run setup-boards
-```
-
-This will create:
-- **Employees** board (for employee lookup)
-- **MSM Shift Data** board (for shift data)
-- **ABS Shift Data** board (for schedule data)
-
-### Step 7: Connect the Boards (One-time setup)
-1. Go to your Monday.com workspace
-2. Open the **MSM Shift Data** board
-3. Click on the **Employee** column header
-4. Change it to **Board Relation** type
-5. Connect it to your **Employees** board
-
-### Step 8: Add Some Employees
-1. Go to your **Employees** board
-2. Add a few employees with their names and details
-3. This will be used for linking shift data to employees
-
-### Step 9: Test the Scraper
-Run the scraper to test everything:
+**MSM Scraper:**
 ```bash
 npm run scrape-msm
 ```
+This will save data to `msm_results.json` and `msm_results.csv`
 
-You should see it:
-1. Open a browser window
-2. Log into the ABS portal
-3. Scrape the data
-4. Send it to Monday.com
+**Schedule Scraper:**
+```bash
+npm run scrape-schedule
+```
+This will save data to `month_block.json` and `month_block.csv`
 
-### Step 10: You're Done! 🎉
-Your scraper is now set up and working! The data will appear in your Monday.com boards.
+You should see:
+1. A browser window open
+2. Login to the ABS portal
+3. Data being scraped
+4. Files saved to the project directory
+
+### Step 6: You're Done! 🎉
+Your scrapers are now set up and working! The data will be saved to local files. You can integrate this data with third-party tools like n8n, Zapier, or Grist.
 
 ---
 
 ## 📋 What This Does
 
-This scraper automatically:
-- Logs into the ABS portal
-- Scrapes Mobile Shift Maintenance data
-- Sends the data directly to Monday.com
-- Links employees between boards
-- Runs on a schedule (optional)
+These scrapers automatically:
+- Log into the ABS portal
+- Scrape data from different sections:
+  - **MSM Scraper**: Mobile Shift Maintenance grid data → `msm_results.json` and `msm_results.csv`
+  - **Schedule Scraper**: Schedule Master (Month Block View) → `month_block.json` and `month_block.csv`
+- Run on a schedule (optional)
+
+The scraped data can be integrated with third-party tools like n8n, Zapier, or Grist for further processing and automation.
 
 ## Requirements
 
@@ -216,75 +198,21 @@ For Linux systems, follow the [Quick Start Guide](#-quick-start-guide) above. Th
 
 For advanced features like scheduling and automation, see the sections below.
 
-**Debug and Feature Flags:**
+**Debug Flag:**
 - `DEBUG`: Set to `True` to run scrapers in visible browser mode, `False` for headless mode
-- `CALL_LOGGER_NOTES`: Set to `True` to log employee comments in call logger, `False` to skip this step
-- `CT_NOTIFICATIONS_ENABLED`: Set to `True` to enable ConnectTeam notifications for new MSM records, `False` to disable
-
-### 📱 ConnectTeam Notifications
-
-The MSM scraper can automatically send private messages to employees via ConnectTeam when new shift records with exceptions are added to Monday.com.
-
-**How it works:**
-1. When a **new** MSM shift record is created (not updated)
-2. System looks up the employee's ConnectTeam user ID from the employee board's `CTUserId` column
-3. Sends a formatted private message with shift details and exception information
-4. Employee receives notification asking for explanation of the issues
-
-**Message format:**
-```
-Hi, we have a documentation/records issue for your recent shift with [Client] on [Date] that we need your help to address.
-
-Can you please reply to this message with an explanation as to the issue(s) noted below?
-
-Shift issues are listed below:
-[Exception Types]
-
-Your shift was scheduled to start at [Scheduled Start] and you clocked in at [Actual Start]
-
-Your shift was scheduled to end at [Scheduled End] and you clocked out at [Actual End]
-```
-
-**Setup requirements:**
-- `CT_API_KEY`: Your ConnectTeam API key
-- `CT_SENDER_ID`: Fixed sender ID (12014505)
-- `CT_NOTIFICATIONS_ENABLED`: Set to `True` to enable
-- Employee board must have a `CTUserId` column with ConnectTeam user IDs
-
-**To enable ConnectTeam notifications:**
-1. Add your ConnectTeam API key to `.env`:
-   ```
-   CT_API_KEY=your_connectteam_api_key_here
-   CT_SENDER_ID=12014505
-   CT_NOTIFICATIONS_ENABLED=True
-   ```
-2. Ensure your employee board has a `CTUserId` column with ConnectTeam user IDs
-3. The system will automatically send notifications for new records only
 
 ### 🔧 Environment Variables
 
 All configuration is managed through the `.env` file. Copy `.env.sample` to `.env` and fill in your values:
 
 **Required Variables:**
-- `MONDAY_API_TOKEN`: Your Monday.com API token
-- `MONDAY_MSM_BOARD_ID`: MSM Shift Data board ID
-- `EMPLOYEE_BOARD_ID`: Employee lookup board ID
 - `ABS_USER`: Your ABS portal username
 - `ABS_PASS`: Your ABS portal password
 
 **Optional Variables:**
-- `MONDAY_SCHEDULE_BOARD_ID`: Schedule board ID (for schedule scraper)
 - `ABS_LOGIN_URL`: ABS login URL (defaults provided)
-- `ABS_SCHEDULE_URL`: ABS schedule URL (defaults provided)
-
-**Feature Flags:**
 - `DEBUG`: Set to `True` for visible browser mode, `False` for headless
-- `CALL_LOGGER_NOTES`: Set to `True` to enable comment logging
-- `CT_NOTIFICATIONS_ENABLED`: Set to `True` to enable ConnectTeam notifications
-
-**ConnectTeam Integration (Optional):**
-- `CT_API_KEY`: Your ConnectTeam API key
-- `CT_SENDER_ID`: Fixed sender ID (12014505)
+- `MSM_SCHEDULE`: Schedule frequency - `daily` (9:00 AM) or `hourly` (every hour)
 
 ## Automated Scheduling (Cron Jobs)
 
@@ -406,25 +334,30 @@ node .\cron_scheduler.mjs --schedule-msm
 
 ### Run Commands
 
-**MSM Scraper with Monday.com (recommended):**
+**MSM Scraper:**
 ```bash
-npm run scrape-msm-monday
+npm run scrape-msm
+# Or directly:
+node mobile_shift_maintenance_scrape.mjs
 ```
 
-**Manual sync to Monday.com:**
+**Schedule Scraper:**
 ```bash
-npm run sync-msm-monday # Sync existing MSM data
+npm run scrape-schedule
+# Or directly:
+node schedule_scrape.mjs
 ```
 
-**Manual run:**
-- Windows (PowerShell)
+**Manual run (Windows PowerShell):**
 ```powershell
 node .\mobile_shift_maintenance_scrape.mjs
+node .\schedule_scrape.mjs
 ```
 
-- macOS/Linux (bash/zsh)
+**Manual run (macOS/Linux):**
 ```bash
 node ./mobile_shift_maintenance_scrape.mjs
+node ./schedule_scrape.mjs
 ```
 
 ---
@@ -449,9 +382,6 @@ node ./mobile_shift_maintenance_scrape.mjs
   - Run from your normal/trusted network.
 - **Login issues**:
   - Verify `.env` values and that the login page still uses `#UserName` / `#Password` fields.
-- **Monday.com board creation issues:**
-  - If board import fails: Ensure the board is named exactly "MSM Shift Data"
-  - If sync fails: Check that `MONDAY_MSM_BOARD_ID` is set correctly in `.env`
 - **Partial/empty results (Mobile Shift Maintenance)**:
   - The script automatically selects all exceptions and paginates the grid.
   - Verify the date range is the last 8 days as expected.

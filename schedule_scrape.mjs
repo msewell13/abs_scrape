@@ -1,8 +1,7 @@
-// scrape_month_block_with_login.mjs — login → Month tab → Month Block View → scrape shift cards w/ solid date + payer → send to Monday.com
+// scrape_month_block_with_login.mjs — login → Month tab → Month Block View → scrape shift cards w/ solid date + payer
 import { chromium } from 'playwright';
 import { writeFile } from 'fs/promises';
 import dotenv from 'dotenv';
-import MondayIntegration from './monday_integration.mjs';
 
 dotenv.config();
 
@@ -508,19 +507,10 @@ async function switchToMonth(page) {
   const missingDate = results.filter(r => !r.date).length;
   console.log(`Quality: ${missingDate} records missing date.`);
 
-  // Send data directly to Monday.com
-  console.log('\n=== Sending data to Monday.com ===');
-  try {
-    const mondayIntegration = new MondayIntegration();
-    await mondayIntegration.syncData(results);
-    console.log('✅ Successfully synced data to Monday.com');
-  } catch (error) {
-    console.error('❌ Monday.com sync failed:', error.message);
-    console.log('\nFalling back to local file output...');
-    await writeFile('month_block.json', JSON.stringify(results, null, 2));
-    await writeFile('month_block.csv', rowsToCsv(results), 'utf8');
-    console.log(`Wrote ${results.length} records to month_block.(json|csv) as backup`);
-  }
+  // Save data to local files
+  await writeFile('month_block.json', JSON.stringify(results, null, 2));
+  await writeFile('month_block.csv', rowsToCsv(results), 'utf8');
+  console.log(`✅ Wrote ${results.length} records to month_block.json and month_block.csv`);
 
   await browser.close();
 })().catch(async (err) => {
