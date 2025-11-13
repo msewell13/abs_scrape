@@ -64,6 +64,10 @@ month_block.csv
 month_block.json
 msm_results.csv
 msm_results.json
+customer_search_results.csv
+customer_search_results.json
+customer_search_error.html
+customer_search_error.png
 
 # Note: Excel template files (schedule_board_import.xlsx, msm_board_import.xlsx) are included in repo as samples
 

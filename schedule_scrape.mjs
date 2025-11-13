@@ -1,11 +1,7 @@
 // scrape_month_block_with_login.mjs — login → Month tab → Month Block View → scrape shift cards w/ solid date + payer
-import { chromium } from 'playwright';
 import { writeFile } from 'fs/promises';
-import dotenv from 'dotenv';
+import auth from './auth.mjs';
 
-dotenv.config();
-
-const LOGIN_URL = process.env.ABS_LOGIN_URL || 'https://abs.brightstarcare.com/Account/Login';
 const SCHEDULE_URL = process.env.ABS_SCHEDULE_URL || 'https://abs.brightstarcare.com/schedule/schedulemaster.aspx';
 
 const MONTH_TAB_TEXT = /month/i;
@@ -22,14 +18,6 @@ const norm = (t) => (t ?? '').replace(/\s+/g, ' ').trim();
 
 // No interactive prompts; rely on .env
 
-async function assertNotBlocked(page, where) {
-  const title = (await page.title()).toLowerCase();
-  const html = (await page.content()).toLowerCase();
-  const blocked = html.includes('sorry, you have been blocked') ||
-                  html.includes('performance & security by cloudflare') ||
-                  title.includes('attention required');
-  if (blocked) throw new Error(`Blocked by WAF/Cloudflare at ${where}. Run from a trusted IP.`);
-}
 
 async function debugDump(page, label) {
   try {
@@ -405,30 +393,6 @@ async function waitForAnySelector(page, selectors, timeout = 25000) {
   throw new Error(`No shift cards appeared for selectors: ${selectors.join(', ')}`);
 }
 
-async function login(page, user, pass) {
-  await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded' });
-  await assertNotBlocked(page, 'login');
-
-  await page.getByText('Accept All', { exact: false }).first().click({ timeout: 1200 }).catch(() => {});
-  await page.getByRole('button', { name: /accept/i }).click({ timeout: 1200 }).catch(() => {});
-
-  await page.locator('#UserName').waitFor({ state: 'visible', timeout: 15000 });
-  await page.locator('#Password').waitFor({ state: 'visible', timeout: 15000 });
-  await page.fill('#UserName', user);
-  await page.fill('#Password', pass);
-
-  const submit = page.locator('button[type="submit"], input[type="submit"]');
-  if (await submit.count()) await submit.first().click(); else await page.press('#Password', 'Enter');
-
-  await Promise.race([
-    page.waitForURL(u => !/\/Account\/Login/i.test(u.href), { timeout: 25000 }),
-    page.waitForLoadState('networkidle', { timeout: 25000 }),
-  ]).catch(() => {});
-  if (/\/Account\/Login/i.test(page.url())) {
-    await debugDump(page, 'LOGIN-STUCK');
-    throw new Error('Still on login after submit — check credentials/MFA.');
-  }
-}
 
 async function switchToMonth(page) {
   const tabByRole = page.getByRole('tab', { name: MONTH_TAB_TEXT }).first();
@@ -442,38 +406,11 @@ async function switchToMonth(page) {
 }
 
 (async () => {
-  // creds from .env only
-  const user = process.env.ABS_USER;
-  const pass = process.env.ABS_PASS;
-  if (!user || !pass) {
-    console.error('Missing credentials. Please set ABS_USER and ABS_PASS in a .env file.');
-    console.error('Example:\nABS_USER=your.username\nABS_PASS=your.password');
-    process.exit(1);
-  }
-
-  const browser = await chromium.launch({ 
-    headless: process.env.DEBUG !== 'True', // Use DEBUG env var to control headless mode
-    args: ['--no-sandbox','--disable-dev-shm-usage'] 
-  });
-  const context = await browser.newContext({
-    locale: 'en-US',
-    timezoneId: 'America/Chicago',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    viewport: { width: 1400, height: 900 },
-  });
-  await context.addInitScript(() => Object.defineProperty(navigator, 'webdriver', { get: () => undefined }));
-
-  const page = await context.newPage();
-
-  // 1) login + save session
-  await login(page, user, pass);
-  const state = await context.storageState();
-  await writeFile('storageState.json', JSON.stringify(state, null, 2));
-  console.log('Saved storageState.json');
+  // Get authenticated browser, context, and page
+  const { browser, page } = await auth.getAuthenticatedBrowser();
 
   // 2) go to Schedule Master
   await page.goto(SCHEDULE_URL, { waitUntil: 'networkidle' });
-  await assertNotBlocked(page, 'schedule');
   await page.waitForTimeout(600);
 
   // 3) Month tab
@@ -507,7 +444,7 @@ async function switchToMonth(page) {
   const missingDate = results.filter(r => !r.date).length;
   console.log(`Quality: ${missingDate} records missing date.`);
 
-  // Save data to local files
+  // Save data to local files (overwrites existing files)
   await writeFile('month_block.json', JSON.stringify(results, null, 2));
   await writeFile('month_block.csv', rowsToCsv(results), 'utf8');
   console.log(`✅ Wrote ${results.length} records to month_block.json and month_block.csv`);

@@ -5,26 +5,16 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { chromium } from 'playwright';
-import dotenv from 'dotenv';
 import { execSync } from 'child_process';
-
-// Load environment variables from .env file
-dotenv.config();
+import auth from './auth.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ---- Config you can tweak ----
 const BASE_URL = 'https://abscore.brightstarcare.com/Scheduling/MobileShiftMaintenance/index/';
-const LOGIN_URL = process.env.ABS_LOGIN_URL || 'https://abs.brightstarcare.com/Account/Login';
-const STORAGE_STATE = path.join(__dirname, 'storageState.json'); // reuse from your other script
 const OUTPUT_JSON = path.join(__dirname, 'msm_results.json');
 const OUTPUT_CSV  = path.join(__dirname, 'msm_results.csv');
-
-// Credentials - set these via environment variables or modify here
-const USERNAME = process.env.ABS_USER || '';
-const PASSWORD = process.env.ABS_PASS || '';
 
 // Set the month you want to scrape (defaults to current month in your local time zone)
 const today = new Date();
@@ -82,157 +72,18 @@ async function updateToLatestVersion() {
   }
 }
 
-async function ensureAuthState() {
-  try {
-    await fs.access(STORAGE_STATE);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function testAuthState(page) {
-  try {
-    // Try to navigate to a protected page to test if auth is still valid
-    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 10000 });
-    // Check if we're redirected to login
-    if (page.url().includes('/Account/Login')) {
-      return false;
-    }
-    // Check if we can see the main content (wait a bit for page to load)
-    await page.waitForTimeout(2000);
-    const hasStartDate = await page.locator('#dtpStartDate').isVisible({ timeout: 5000 }).catch(() => false);
-    return hasStartDate;
-  } catch {
-    return false;
-  }
-}
-
-async function assertNotBlocked(page, context) {
-  // Simple check for common blocking patterns
-  const title = await page.title();
-  if (title.includes('Access Denied') || title.includes('Blocked')) {
-    throw new Error(`Page appears to be blocked in ${context} context`);
-  }
-}
-
 async function debugDump(page, context) {
   const title = await page.title();
   const url = page.url();
   console.log(`DEBUG ${context}: Title="${title}", URL="${url}"`);
 }
 
-async function performLogin(page) {
-  if (!USERNAME || !PASSWORD) {
-    throw new Error('Username and password must be provided via ABS_USER and ABS_PASS environment variables');
-  }
-  
-  console.log('Performing login...');
-  await login(page, USERNAME, PASSWORD);
-  
-  // Save the authentication state for future use
-  await page.context().storageState({ path: STORAGE_STATE });
-  console.log('Authentication state saved');
-}
-
-async function login(page, user, pass) {
-  await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded' });
-  await assertNotBlocked(page, 'login');
-
-  await page.getByText('Accept All', { exact: false }).first().click({ timeout: 1200 }).catch(() => {});
-  await page.getByRole('button', { name: /accept/i }).click({ timeout: 1200 }).catch(() => {});
-
-  await page.locator('#UserName').waitFor({ state: 'visible', timeout: 15000 });
-  await page.locator('#Password').waitFor({ state: 'visible', timeout: 15000 });
-  await page.fill('#UserName', user);
-  await page.fill('#Password', pass);
-
-  const submit = page.locator('button[type="submit"], input[type="submit"]');
-  if (await submit.count()) await submit.first().click(); else await page.press('#Password', 'Enter');
-
-  await Promise.race([
-    page.waitForURL(u => !/\/Account\/Login/i.test(u.href), { timeout: 25000 }),
-    page.waitForLoadState('networkidle', { timeout: 25000 }),
-  ]).catch(() => {});
-  if (/\/Account\/Login/i.test(page.url())) {
-    await debugDump(page, 'LOGIN-STUCK');
-    throw new Error('Still on login after submit — check credentials/MFA.');
-  }
-}
-
 async function run() {
   // Check for updates and pull latest version
   await updateToLatestVersion();
   
-  const browser = await chromium.launch({ 
-    headless: process.env.DEBUG !== 'True', // Use DEBUG env var to control headless mode 
-    args: ['--no-sandbox', '--disable-dev-shm-usage'] 
-  });
-  let context;
-  let page;
-  
-  // Check if we have existing auth state
-  const hasStorage = await ensureAuthState();
-  
-  if (hasStorage) {
-    // Try to use existing storage state
-    try {
-      context = await browser.newContext({
-        storageState: STORAGE_STATE,
-        locale: 'en-US',
-        timezoneId: 'America/Chicago',
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        viewport: { width: 1400, height: 900 },
-      });
-      await context.addInitScript(() => Object.defineProperty(navigator, 'webdriver', { get: () => undefined }));
-      page = await context.newPage();
-      
-      // Test if the stored auth is still valid by trying to access a simple page first
-      try {
-        await page.goto('https://abs.brightstarcare.com/', { waitUntil: 'domcontentloaded', timeout: 10000 });
-        if (page.url().includes('/Account/Login')) {
-          throw new Error('Redirected to login');
-        }
-        console.log('Using existing authentication state');
-      } catch (error) {
-        console.log('Stored authentication expired, performing fresh login');
-        await context.close();
-        context = await browser.newContext({
-          locale: 'en-US',
-          timezoneId: 'America/Chicago',
-          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          viewport: { width: 1400, height: 900 },
-        });
-        await context.addInitScript(() => Object.defineProperty(navigator, 'webdriver', { get: () => undefined }));
-        page = await context.newPage();
-        await performLogin(page);
-      }
-    } catch (error) {
-      console.log('Error using stored auth, performing fresh login:', error.message);
-      if (context) await context.close();
-      context = await browser.newContext({
-        locale: 'en-US',
-        timezoneId: 'America/Chicago',
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        viewport: { width: 1400, height: 900 },
-      });
-      await context.addInitScript(() => Object.defineProperty(navigator, 'webdriver', { get: () => undefined }));
-      page = await context.newPage();
-      await performLogin(page);
-    }
-  } else {
-    // No stored auth, perform fresh login
-    console.log('No stored authentication found, performing fresh login');
-    context = await browser.newContext({
-      locale: 'en-US',
-      timezoneId: 'America/Chicago',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      viewport: { width: 1400, height: 900 },
-    });
-    await context.addInitScript(() => Object.defineProperty(navigator, 'webdriver', { get: () => undefined }));
-    page = await context.newPage();
-    await performLogin(page);
-  }
+  // Get authenticated browser, context, and page
+  const { browser, page } = await auth.getAuthenticatedBrowser();
 
   // Go to page (should already be there from auth test, but ensure we're on the right page)
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
@@ -1271,10 +1122,10 @@ async function run() {
     return formatted;
   });
 
-  // Write JSON (with formatted exceptions for readability)
+  // Write JSON (overwrites existing file, with formatted exceptions for readability)
   await fs.writeFile(OUTPUT_JSON, JSON.stringify(formattedRows, null, 2), 'utf8');
 
-  // Write CSV (simple) - use formatted rows for better readability
+  // Write CSV (overwrites existing file) - use formatted rows for better readability
   const headers = pickHeaders;
   const csvLines = [
     headers.join(','),

@@ -7,7 +7,7 @@ This repo contains Playwright-based scrapers for the ABS portal:
   - Outputs to: `month_block.json` and `month_block.csv`
 - Runs automatically on a schedule via cron job (optional)
 
-The scrapers load credentials from a `.env` file and save a reusable Playwright `storageState.json` after login. Scraped data can be integrated with third-party tools like n8n, Zapier, or Grist.
+The scrapers load credentials from a `.env` file and save a reusable Playwright `storageState.json` after login. Scraped data can be integrated with third-party tools like N8N.
 
 
 ## 🚀 Quick Start Guide
@@ -148,7 +148,7 @@ These scrapers automatically:
   - **Schedule Scraper**: Schedule Master (Month Block View) → `month_block.json` and `month_block.csv`
 - Run on a schedule (optional)
 
-The scraped data can be integrated with third-party tools like n8n, Zapier, or Grist for further processing and automation.
+The scraped data can be integrated with third-party tools like N8N for further processing and automation.
 
 ## Requirements
 
@@ -177,23 +177,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 
 ---
 
-## Install
 
-### Quick Install (All Platforms)
-
-From this project folder:
-```bash
-npm install
-npx playwright install chromium
-```
-
-This installs `playwright` and `dotenv` used by the scripts.
-
-### Linux Setup
-
-For Linux systems, follow the [Quick Start Guide](#-quick-start-guide) above. The steps are the same across all platforms.
-
----
 ## 🔧 Advanced Features
 
 For advanced features like scheduling and automation, see the sections below.
