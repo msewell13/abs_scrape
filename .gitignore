@@ -68,6 +68,10 @@ customer_search_results.csv
 customer_search_results.json
 customer_search_error.html
 customer_search_error.png
+employee_search_results.csv
+employee_search_results.json
+employee_search_error.html
+employee_search_error.png
 
 # Note: Excel template files (schedule_board_import.xlsx, msm_board_import.xlsx) are included in repo as samples
 

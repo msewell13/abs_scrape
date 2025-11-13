@@ -8,6 +8,7 @@
     "scrape-msm": "node mobile_shift_maintenance_scrape.mjs",
     "scrape-schedule": "node schedule_scrape.mjs",
     "scrape-customers": "node customer_search_scrape.mjs",
+    "scrape-employees": "node employee_search_scrape.mjs",
     "cron-msm": "node cron_scheduler.mjs --schedule-msm",
     "install-tasks": "powershell -ExecutionPolicy Bypass -File install_scheduled_tasks.ps1",
     "cron-msm-mac": "./cron_scheduler_mac.sh msm",
