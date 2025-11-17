@@ -100,7 +100,6 @@ The integration automatically creates:
 
 Each table includes:
 - All columns from your scraper output
-- A `scraped_at` timestamp column (automatically added)
 
 ## Docker Compose Integration
 

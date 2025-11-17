@@ -254,8 +254,7 @@ async function run() {
     'Position',
     // Comments column
     'Comments',
-    // Exception columns (add both common variants)
-    'Exception Type',
+    // Exception column
     'Exception Types',
     // Shift ID column for records with exceptions
     'Shift ID',
@@ -436,13 +435,13 @@ async function run() {
       
       // Filter to only include records that have exceptions
       const hasException = (obj) => {
-        const exceptionType = obj['Exception Type'] || obj['Exception Types'] || '';
+        const exceptionType = obj['Exception Types'] || '';
         return exceptionType && exceptionType.trim() !== '';
       };
       
       // Filter out "No Task List Submitted" records with "00:00" Actual End unless they have other exceptions
       const shouldIncludeRecord = (obj) => {
-        const exceptionType = obj['Exception Type'] || obj['Exception Types'] || '';
+        const exceptionType = obj['Exception Types'] || '';
         const actualEnd = obj['Actual End'] || '';
         
         // If it's "No Task List Submitted" and Actual End is "00:00", check for other exceptions
@@ -505,7 +504,7 @@ async function run() {
       }, { tr, pickHeaders, headerMap });
       
       // Check if this row has exceptions
-      const exceptionType = rowData['Exception Type'] || rowData['Exception Types'] || '';
+      const exceptionType = rowData['Exception Types'] || '';
       const actualEnd = rowData['Actual End'] || '';
       
       // First check if it has any exceptions
@@ -1065,7 +1064,7 @@ async function run() {
     
     // Filter to only include records with exceptions and count them
     const pageRowsWithExceptions = allPageRows.filter(obj => {
-      const exceptionType = obj['Exception Type'] || obj['Exception Types'] || '';
+      const exceptionType = obj['Exception Types'] || '';
       const actualEnd = obj['Actual End'] || '';
       
       // First check if it has any exceptions

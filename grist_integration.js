@@ -70,7 +70,7 @@ async function loadCsvData(filePath) {
  * @param {boolean} upsert - Whether to upsert (update existing) records
  * @param {Array<string>} keyColumns - Columns to use for upsert matching
  */
-async function sendToGrist(data, apiKey, server, docName, tableName, org = 'brightstar', upsert = false, keyColumns = null) {
+async function sendToGrist(data, apiKey, server, docName, tableName, org = 'brightstar', upsert = false, keyColumns = null, docId = null) {
     if (!data || data.length === 0) {
         console.log('No data to send');
         return;
@@ -78,41 +78,117 @@ async function sendToGrist(data, apiKey, server, docName, tableName, org = 'brig
 
     const client = new GristClient(apiKey, server, org);
 
-    // Get or create document
-    console.log(`Getting/creating document: ${docName}`);
-    const doc = await client.getOrCreateDocument(docName);
-    console.log(`Document ID: ${doc.id}`);
+    // Get or create document - use provided docId if available, otherwise check env var, otherwise get/create by name
+    let doc;
+    const envDocId = process.env.GRIST_DOC_ID || docId;
+    if (envDocId) {
+        // Check if document ID is a draft (starts with "new~")
+        if (envDocId.startsWith('new~')) {
+            console.log(`⚠️  Document ID is a draft (${envDocId}). Creating a new saved document instead...`);
+            // Create a new saved document in the workspace
+            doc = await client.getOrCreateDocument(docName);
+            console.log(`✅ Created new saved document: ${doc.id}`);
+            console.log(`⚠️  Update your .env file: GRIST_DOC_ID=${doc.id}`);
+        } else {
+            // Use provided document ID directly
+            console.log(`Using provided document ID: ${envDocId}`);
+            doc = { id: envDocId, name: docName };
+            
+            // Ensure document is saved so it appears in the user's document list
+            try {
+                await client.saveDocument(doc.id, docName);
+            } catch (e) {
+                // Document might already be saved, continue anyway
+            }
+        }
+    } else {
+        console.log(`Getting/creating document: ${docName}`);
+        doc = await client.getOrCreateDocument(docName);
+        console.log(`Document ID: ${doc.id}`);
+        
+        // Document is already saved by getOrCreateDocument, but ensure it's persisted
+        try {
+            await client.saveDocument(doc.id, docName);
+            console.log(`✅ Document saved and will appear in your document list`);
+        } catch (e) {
+            // Document might already be saved, continue anyway
+        }
+        
+        console.log(`⚠️  Note: To reuse this document in future runs, set: export GRIST_DOC_ID=${doc.id}`);
+    }
 
     // Infer columns from data
     console.log('Inferring column types from data...');
     const columns = inferColumnsFromData(data);
+    const columnMapping = columns._mapping || {}; // Get mapping from sanitized to original names
     console.log(`Detected ${columns.length} columns: ${columns.map(c => c.id).join(', ')}`);
 
     // Ensure table exists with correct schema
     console.log(`Ensuring table '${tableName}' exists...`);
-    await client.ensureTable(doc.id, tableName, columns);
-
-    // Add timestamp column if not present
-    const hasTimestamp = columns.some(c => c.id === 'scraped_at');
-    if (!hasTimestamp) {
-        await client.ensureTable(doc.id, tableName, [{ id: 'scraped_at', type: 'DateTime' }]);
+    // Remove the _mapping property before sending to ensureTable
+    const cleanColumns = columns.filter(c => c.id !== '_mapping');
+    
+    await client.ensureTable(doc.id, tableName, cleanColumns);
+    
+    // Special handling: Link Customer column in MSM_Results to Customer_Search_Results
+    if (tableName === 'MSM_Results') {
+        try {
+            const tables = await client.listTables(doc.id);
+            if (tables.includes('Customer_Search_Results')) {
+                console.log('Creating reference link: Customer → Customer_Search_Results...');
+                await client.createReferenceColumn(doc.id, tableName, 'Customer', 'Customer_Search_Results', 0);
+                console.log('✅ Customer column is now linked to Customer_Search_Results table');
+            }
+        } catch (e) {
+            console.log(`⚠️  Could not create reference link: ${e.message}`);
+            console.log('   You can manually create this link in Grist UI');
+        }
     }
 
-    // Add timestamp to all records
-    const timestamp = new Date().toISOString();
-    data.forEach(record => {
-        if (!record.scraped_at) {
-            record.scraped_at = timestamp;
+    // Transform data to use sanitized column names
+    const transformedData = data.map(record => {
+        const transformed = {};
+        for (const [originalKey, value] of Object.entries(record)) {
+            const sanitizedKey = columnMapping[originalKey] || originalKey.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+            transformed[sanitizedKey] = value;
         }
+        return transformed;
     });
 
+    // Sanitize key columns to match transformed data column names
+    let sanitizedKeyColumns = null;
+    if (upsert && keyColumns) {
+        sanitizedKeyColumns = keyColumns.map(keyCol => {
+            if (!keyCol) {
+                console.warn('Warning: Empty key column found, skipping');
+                return null;
+            }
+            // Find the sanitized name from the mapping
+            for (const [original, sanitized] of Object.entries(columnMapping)) {
+                if (original === keyCol) {
+                    return sanitized;
+                }
+            }
+            // If not in mapping, sanitize it ourselves
+            return String(keyCol).replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+        }).filter(col => col !== null); // Remove any null values
+    }
+
     // Send data
-    console.log(`Sending ${data.length} records to Grist...`);
+    console.log(`Sending ${transformedData.length} records to Grist...`);
     let result;
     if (upsert) {
-        result = await client.upsertRecords(doc.id, tableName, data, keyColumns);
+        result = await client.upsertRecords(doc.id, tableName, transformedData, sanitizedKeyColumns);
     } else {
-        result = await client.addRecords(doc.id, tableName, data);
+        result = await client.addRecords(doc.id, tableName, transformedData);
+    }
+
+    // Ensure document is saved after data changes
+    try {
+        await client.saveDocument(doc.id, docName);
+        console.log('✅ Document saved after data update');
+    } catch (e) {
+        console.log('⚠️  Could not explicitly save document (may already be saved):', e.message);
     }
 
     console.log(`✅ Successfully sent ${data.length} records to ${docName}/${tableName}`);
