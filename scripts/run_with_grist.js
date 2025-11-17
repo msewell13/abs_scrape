@@ -30,50 +30,62 @@ console.log(`   Server: ${server}`);
 console.log(`   Document: ${docName}`);
 console.log('');
 
-// Run MSM scraper
-console.log('📊 Running MSM scraper...');
-try {
-    execSync('npm run scrape-msm', { stdio: 'inherit' });
-    
-    const msmFile = path.join(process.cwd(), 'msm_results.json');
-    const fs = require('fs');
-    
-    if (fs.existsSync(msmFile)) {
-        console.log('');
-        console.log('📤 Sending MSM results to Grist...');
-        const data = await loadJsonData(msmFile);
-        await sendToGrist(data, apiKey, server, docName, 'MSM_Results', org);
-    } else {
-        console.log('⚠️  Warning: msm_results.json not found after scraper run');
+async function runScrapers() {
+    // Run MSM scraper
+    console.log('📊 Running MSM scraper...');
+    try {
+        execSync('npm run scrape-msm', { stdio: 'inherit' });
+        
+        const msmFile = path.join(process.cwd(), 'msm_results.json');
+        const fs = require('fs');
+        
+        if (fs.existsSync(msmFile)) {
+            console.log('');
+            console.log('📤 Sending MSM results to Grist...');
+            const data = await loadJsonData(msmFile);
+            await sendToGrist(data, apiKey, server, docName, 'MSM_Results', org);
+        } else {
+            console.log('⚠️  Warning: msm_results.json not found after scraper run');
+        }
+    } catch (error) {
+        console.log('⚠️  Warning: MSM scraper failed (continuing...)');
+        if (error.message) console.log(`   ${error.message}`);
     }
-} catch (error) {
-    console.log('⚠️  Warning: MSM scraper failed (continuing...)');
-    if (error.message) console.log(`   ${error.message}`);
+
+    console.log('');
+
+    // Run schedule scraper
+    console.log('📅 Running schedule scraper...');
+    try {
+        execSync('npm run scrape-schedule', { stdio: 'inherit' });
+        
+        const scheduleFile = path.join(process.cwd(), 'month_block.json');
+        const fs = require('fs');
+        
+        if (fs.existsSync(scheduleFile)) {
+            console.log('');
+            console.log('📤 Sending schedule results to Grist...');
+            const data = await loadJsonData(scheduleFile);
+            await sendToGrist(data, apiKey, server, docName, 'Schedule_Data', org);
+        } else {
+            console.log('⚠️  Warning: month_block.json not found after scraper run');
+        }
+    } catch (error) {
+        console.log('⚠️  Warning: Schedule scraper failed (continuing...)');
+        if (error.message) console.log(`   ${error.message}`);
+    }
+
+    console.log('');
+    console.log('✅ All scrapers completed');
 }
 
-console.log('');
-
-// Run schedule scraper
-console.log('📅 Running schedule scraper...');
-try {
-    execSync('npm run scrape-schedule', { stdio: 'inherit' });
-    
-    const scheduleFile = path.join(process.cwd(), 'month_block.json');
-    const fs = require('fs');
-    
-    if (fs.existsSync(scheduleFile)) {
-        console.log('');
-        console.log('📤 Sending schedule results to Grist...');
-        const data = await loadJsonData(scheduleFile);
-        await sendToGrist(data, apiKey, server, docName, 'Schedule_Data', org);
-    } else {
-        console.log('⚠️  Warning: month_block.json not found after scraper run');
-    }
-} catch (error) {
-    console.log('⚠️  Warning: Schedule scraper failed (continuing...)');
-    if (error.message) console.log(`   ${error.message}`);
+// Run if called directly
+if (require.main === module) {
+    runScrapers().catch(error => {
+        console.error('Unhandled error:', error);
+        process.exit(1);
+    });
 }
 
-console.log('');
-console.log('✅ All scrapers completed');
+module.exports = { runScrapers };
 
