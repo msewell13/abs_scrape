@@ -31,7 +31,7 @@ if npm run scrape-msm 2>&1 | tee /tmp/scraper_msm.log; then
     if [ -f "msm_results.json" ]; then
         echo ""
         echo "📤 Sending MSM results to Grist..."
-        python3 grist_integration.py \
+        node grist_integration.js \
             --api-key "$GRIST_API_KEY" \
             --server "$GRIST_SERVER" \
             --doc "$GRIST_DOC" \
@@ -55,7 +55,7 @@ if npm run scrape-schedule 2>&1 | tee /tmp/scraper_schedule.log; then
     if [ -f "month_block.json" ]; then
         echo ""
         echo "📤 Sending schedule results to Grist..."
-        python3 grist_integration.py \
+        node grist_integration.js \
             --api-key "$GRIST_API_KEY" \
             --server "$GRIST_SERVER" \
             --doc "$GRIST_DOC" \

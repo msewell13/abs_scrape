@@ -13,7 +13,8 @@
     "install-tasks": "powershell -ExecutionPolicy Bypass -File install_scheduled_tasks.ps1",
     "cron-msm-mac": "./cron_scheduler_mac.sh msm",
     "install-cron-mac": "./cron_scheduler_mac.sh install",
-    "install-cron-linux": "./cron_scheduler_mac.sh install"
+    "install-cron-linux": "./cron_scheduler_mac.sh install",
+    "scrape-with-grist": "node scripts/run_with_grist.js"
   },
   "keywords": [],
   "author": "",

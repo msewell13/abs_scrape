@@ -4,16 +4,19 @@ This repository includes integration with Grist for automatically sending scrape
 
 ## Files
 
-- `grist_client.py` - Grist API client library
-- `grist_integration.py` - Script to send JSON/CSV files to Grist
-- `scripts/run_with_grist.sh` - Wrapper script to run scrapers and send to Grist
+- `grist_client.js` - Grist API client library (Node.js)
+- `grist_integration.js` - Script to send JSON/CSV files to Grist
+- `scripts/run_with_grist.js` - Node.js script to run scrapers and send to Grist
+- `scripts/run_with_grist.sh` - Bash wrapper script (optional)
 
 ## Setup
 
-1. **Install Python dependencies:**
+1. **Install Node.js dependencies (already included):**
    ```bash
-   pip install -r requirements.txt
+   npm install
    ```
+   
+   No additional dependencies needed - uses Node.js built-in modules only!
 
 2. **Set environment variables:**
    ```bash
@@ -29,12 +32,17 @@ This repository includes integration with Grist for automatically sending scrape
 
 ## Usage
 
-### Option 1: Use the wrapper script (recommended)
+### Option 1: Use the npm script (recommended)
 
 ```bash
 export GRIST_API_KEY=your_key
 export GRIST_SERVER=https://grist.pythonfinancial.com
-bash scripts/run_with_grist.sh
+npm run scrape-with-grist
+```
+
+Or use the Node.js script directly:
+```bash
+node scripts/run_with_grist.js
 ```
 
 This will:
@@ -48,7 +56,7 @@ This will:
 npm run scrape-msm
 
 # Send to Grist
-python3 grist_integration.py \
+node grist_integration.js \
   --api-key $GRIST_API_KEY \
   --server $GRIST_SERVER \
   --doc "ABS_Data" \
@@ -58,27 +66,27 @@ python3 grist_integration.py \
 
 ### Option 3: Use in your scraper code
 
-```python
-from grist_client import GristClient, infer_columns_from_data
+```javascript
+const { GristClient, inferColumnsFromData } = require('./grist_client');
 
-client = GristClient(
-    api_key=os.getenv("GRIST_API_KEY"),
-    server="https://grist.pythonfinancial.com",
-    org="brightstar"
-)
+const client = new GristClient(
+    process.env.GRIST_API_KEY,
+    'https://grist.pythonfinancial.com',
+    'brightstar'
+);
 
-# Get or create document
-doc = client.get_or_create_document("ABS_Data")
+// Get or create document
+const doc = await client.getOrCreateDocument('ABS_Data');
 
-# Prepare your data
-data = [{"column1": "value1", "column2": 123}]
+// Prepare your data
+const data = [{ column1: 'value1', column2: 123 }];
 
-# Infer columns and ensure table exists
-columns = infer_columns_from_data(data)
-client.ensure_table(doc["id"], "MSM_Results", columns)
+// Infer columns and ensure table exists
+const columns = inferColumnsFromData(data);
+await client.ensureTable(doc.id, 'MSM_Results', columns);
 
-# Add records
-client.add_records(doc["id"], "MSM_Results", data)
+// Add records
+await client.addRecords(doc.id, 'MSM_Results', data);
 ```
 
 ## Grist Tables Created
