@@ -120,13 +120,43 @@ async function sendToGrist(data, apiKey, server, docName, tableName, org = 'brig
     // Infer columns from data
     console.log('Inferring column types from data...');
     const columns = inferColumnsFromData(data);
-    const columnMapping = columns._mapping || {}; // Get mapping from sanitized to original names
+    let columnMapping = columns._mapping || {}; // Get mapping from sanitized to original names
+    
+    // Special handling: Check if Apt_Room column exists in Grist and update mapping
+    if (tableName === 'Customer_Search_Results' && columnMapping['Apt/Room'] === 'AptRoom') {
+        try {
+            const schema = await client.getTableSchema(doc.id, tableName);
+            const hasAptRoom = schema.columns.some(c => c.id === 'Apt_Room');
+            if (hasAptRoom) {
+                // Update mapping to use Apt_Room instead of AptRoom
+                columnMapping['Apt/Room'] = 'Apt_Room';
+                // Also update the column definition
+                const aptRoomCol = columns.find(c => c.id === 'AptRoom');
+                if (aptRoomCol) {
+                    aptRoomCol.id = 'Apt_Room';
+                }
+                console.log('Using existing Apt_Room column (label: Apt/Room)');
+            }
+        } catch (e) {
+            // If we can't check, use the default sanitized version
+        }
+    }
+    
     console.log(`Detected ${columns.length} columns: ${columns.map(c => c.id).join(', ')}`);
 
     // Ensure table exists with correct schema
     console.log(`Ensuring table '${tableName}' exists...`);
     // Remove the _mapping property before sending to ensureTable
     const cleanColumns = columns.filter(c => c.id !== '_mapping');
+    
+    // Add Geocode column if it doesn't exist (for Customer_Search_Results table)
+    if (tableName === 'Customer_Search_Results') {
+        const hasGeocode = cleanColumns.some(c => c.id === 'Geocode');
+        if (!hasGeocode) {
+            cleanColumns.push({ id: 'Geocode', type: 'Bool' });
+            console.log('Added Geocode column to schema');
+        }
+    }
     
     await client.ensureTable(doc.id, tableName, cleanColumns);
     
@@ -152,6 +182,9 @@ async function sendToGrist(data, apiKey, server, docName, tableName, org = 'brig
             const sanitizedKey = columnMapping[originalKey] || originalKey.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
             transformed[sanitizedKey] = value;
         }
+        // Set Geocode field to true for all records (toggle on by default)
+        const geocodeKey = 'Geocode';
+        transformed[geocodeKey] = true;
         return transformed;
     });
 

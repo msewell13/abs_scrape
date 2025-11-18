@@ -628,13 +628,14 @@ class GristClient {
                 existingMap.set(key, record);
             }
         });
-
+        
         // Separate records into updates and inserts
         const recordsToUpdate = [];
         const recordsToInsert = [];
 
         formattedRecords.forEach(record => {
-            const key = this._buildRecordKey(record.fields || record, keyColumns);
+            const fields = record.fields || record;
+            const key = this._buildRecordKey(fields, keyColumns);
             
             // Ensure all fields are present (fill missing ones with null)
             const normalizedFields = {};
@@ -694,6 +695,12 @@ class GristClient {
         }
 
         console.log(`✅ Upsert complete: ${results.updated} updated, ${results.inserted} inserted`);
+        if (results.inserted > 0) {
+            console.log(`   Note: ${results.inserted} new records were inserted (these are customers that didn't exist in Grist yet)`);
+        }
+        if (results.updated > 0) {
+            console.log(`   Note: ${results.updated} existing records were updated`);
+        }
         return results;
     }
 
@@ -710,11 +717,18 @@ class GristClient {
         
         for (const col of keyColumns) {
             const value = fields[col];
-            if (value === null || value === undefined || value === '') {
-                // Missing key column value, return null
-                return null;
+            // Allow empty values - use empty string instead of null
+            // This allows matching records where Product might be empty
+            if (value === null || value === undefined) {
+                keyParts.push('');
+            } else {
+                keyParts.push(String(value));
             }
-            keyParts.push(String(value));
+        }
+        
+        // If all key parts are empty, return null (invalid key)
+        if (keyParts.every(part => part === '')) {
+            return null;
         }
         
         return keyParts.join('|||'); // Use a separator that's unlikely to appear in data

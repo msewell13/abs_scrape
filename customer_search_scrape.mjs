@@ -348,33 +348,72 @@ async function run() {
     
     // Now fetch additional details from each customer's detail page
     console.log(`\nFetching additional details from customer detail pages...`);
-    const outputData = [];
     
-    for (let i = 0; i < data.rows.length; i++) {
-      const record = data.rows[i];
+    // Limit to first 10 records for testing (remove this limit for full run)
+    const maxRecords = process.env.TEST_MODE === 'true' ? 10 : data.rows.length;
+    const recordsToProcess = data.rows.slice(0, maxRecords);
+    if (maxRecords < data.rows.length) {
+      console.log(`⚠️  TEST MODE: Processing only first ${maxRecords} records`);
+    }
+    
+    // Concurrency control - process multiple customers in parallel
+    // Lower concurrency helps avoid conflicts when opening product pages
+    const CONCURRENCY = parseInt(process.env.CONCURRENCY || '3', 10); // Default to 3 concurrent requests
+    console.log(`Using concurrency limit: ${CONCURRENCY}`);
+    
+    // Create a semaphore-like function to limit concurrency
+    const createConcurrencyLimiter = (limit) => {
+      let running = 0;
+      const queue = [];
+      
+      const run = async (fn) => {
+        if (running >= limit) {
+          await new Promise(resolve => queue.push(resolve));
+        }
+        running++;
+        try {
+          return await fn();
+        } finally {
+          running--;
+          if (queue.length > 0) {
+            queue.shift()();
+          }
+        }
+      };
+      
+      return run;
+    };
+    
+    const limitConcurrency = createConcurrencyLimiter(CONCURRENCY);
+    
+    // Function to process a single customer record
+    const processCustomer = async (record, index, total) => {
       const customerNumber = record['Customer Number'];
       
       if (!customerNumber || customerNumber.trim() === '') {
-        console.log(`⚠️  Record ${i + 1}/${data.rows.length}: No Customer Number, skipping detail page`);
-        outputData.push(record);
-        continue;
+        console.log(`⚠️  Record ${index + 1}/${total}: No Customer Number, skipping detail page`);
+        return record;
       }
       
+      // Create a new page for this customer to allow parallel processing
+      const customerPage = await context.newPage();
+      
       try {
-        console.log(`[${i + 1}/${data.rows.length}] Fetching details for Customer Number: ${customerNumber}...`);
+        console.log(`[${index + 1}/${total}] Fetching details for Customer Number: ${customerNumber}...`);
         
         // Navigate to customer detail page
         const detailUrl = `https://abscore.brightstarcare.com/customer/customerdetail/${customerNumber}`;
-        await page.goto(detailUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await page.waitForLoadState('networkidle').catch(() => {});
-        await page.waitForTimeout(2000); // Give page time to load
+        await customerPage.goto(detailUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await customerPage.waitForLoadState('networkidle').catch(() => {});
+        await customerPage.waitForTimeout(1000); // Reduced wait time
         
         // Extract additional fields
-        const additionalData = await page.evaluate(() => {
+        const additionalData = await customerPage.evaluate(() => {
           const result = {
             Sex: '',
             DOB: '',
             Address: '',
+            'Apt/Room': '',
             Email: ''
           };
           
@@ -424,7 +463,53 @@ async function run() {
           try {
             const addressElement = document.querySelector('#divCustomerHeader > div.bg-gray.p-3.mx-2.border.border-radius-5 > div > div.col-md-9 > div:nth-child(1) > div:nth-child(2) > div:nth-child(1) > a');
             if (addressElement) {
-              result.Address = addressElement.textContent.trim();
+              const fullAddress = addressElement.textContent.trim();
+              
+              // Parse address to extract apartment/room number
+              // Look for patterns like: Apt 123, Room 456, Unit 789, Suite 101, #202, No. 8, etc.
+              // Also handle cases like "Unit, Room 311" where there's a comma
+              // Handle multiple patterns (e.g., "Apt 3A Room 4")
+              let aptRoomText = '';
+              let cleanedAddress = fullAddress;
+              
+              // Collect all apt/room matches
+              const patterns = [
+                { regex: /(?:Unit,?\s*)?Room\s+([A-Z0-9\-]+)/i, prefix: 'Room ' },
+                { regex: /(?:Apt|Apartment)\s+([A-Z0-9\-]+)/i, prefix: '' },
+                { regex: /(?:Suite|Ste)\s+([A-Z0-9\-]+)/i, prefix: '' },
+                { regex: /\bUnit\s+([A-Z0-9\-]+)/i, prefix: '' },
+                { regex: /#\s*([A-Z0-9\-]+)/i, prefix: '#' },
+                { regex: /\bNo\.?\s+([0-9]+[A-Z0-9\-]*)\b/i, prefix: 'No. ' }  // Only match "No." followed by a number
+              ];
+              
+              const matches = [];
+              for (const pattern of patterns) {
+                const match = fullAddress.match(pattern.regex);
+                if (match) {
+                  // Check if Unit is part of a street name (e.g., "Unit 5 Street")
+                  if (pattern.regex.source.includes('\\bUnit') && fullAddress.match(/\bUnit\s+[A-Z0-9\-]+\s+[A-Z][a-z]+\s+[A-Z]/i)) {
+                    continue;
+                  }
+                  const text = pattern.prefix ? (pattern.prefix + match[1]) : match[0].trim();
+                  matches.push({ text, fullMatch: match[0] });
+                }
+              }
+              
+              if (matches.length > 0) {
+                // Combine all matches (e.g., "Apt 3A, Room 4")
+                aptRoomText = matches.map(m => m.text).join(', ');
+                
+                // Remove all matched patterns from address
+                matches.forEach(match => {
+                  cleanedAddress = cleanedAddress.replace(match.fullMatch, '');
+                });
+                
+                // Clean up extra spaces and commas
+                cleanedAddress = cleanedAddress.replace(/\s+/g, ' ').replace(/,\s*,/g, ',').replace(/,\s*$/, '').trim();
+              }
+              
+              result['Apt/Room'] = aptRoomText;
+              result.Address = cleanedAddress;
             }
           } catch (e) {
             console.log('Error extracting address:', e);
@@ -447,24 +532,168 @@ async function run() {
           return result;
         });
         
-        // Merge additional data into the record
+        // Now navigate to PayerAndProduct page to get product/payer details
+        let allProductDetails = [];
+        try {
+          console.log(`  Fetching payer and product details...`);
+          const payerProductUrl = `https://abscore.brightstarcare.com/Customer/CustomerDetail/PayerAndProduct/${customerNumber}`;
+          await customerPage.goto(payerProductUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          await customerPage.waitForLoadState('networkidle').catch(() => {});
+          await customerPage.waitForTimeout(1000); // Reduced wait time
+        
+        // Find all product rows and check for approved ones
+        const productData = await customerPage.evaluate(() => {
+          const rows = [];
+          const table = document.querySelector('#products > table > tbody');
+          if (!table) return rows;
+          
+          const trElements = table.querySelectorAll('tr');
+          trElements.forEach((tr, index) => {
+            // Check if this row is approved for scheduling
+            // The selector is: #products > table > tbody > tr:nth-child(1) > td:nth-child(2) > i
+            const statusCell = tr.querySelector('td:nth-child(2)');
+            if (statusCell) {
+              const statusIcon = statusCell.querySelector('i');
+              const statusText = statusCell.textContent.trim().toLowerCase();
+              const statusTitle = statusIcon ? (statusIcon.getAttribute('title') || '').toLowerCase() : '';
+              const statusAriaLabel = statusIcon ? (statusIcon.getAttribute('aria-label') || '').toLowerCase() : '';
+              
+              // Check if it's approved for scheduling - check text, title, or aria-label
+              const isApproved = (statusText.includes('approved') && statusText.includes('scheduling')) ||
+                                 (statusTitle.includes('approved') && statusTitle.includes('scheduling')) ||
+                                 (statusAriaLabel.includes('approved') && statusAriaLabel.includes('scheduling'));
+              
+              if (isApproved && statusIcon) {
+                // Find the pencil icon (edit button)
+                const editButton = tr.querySelector('td.k-command-cell > a > span');
+                if (editButton) {
+                  rows.push({
+                    rowIndex: index + 1,
+                    isApproved: true,
+                    hasEditButton: true
+                  });
+                }
+              }
+            }
+          });
+          return rows;
+        });
+        
+        console.log(`    Found ${productData.length} approved product(s) for scheduling`);
+        
+        // For each approved product, click the edit button and scrape the details
+        for (const product of productData) {
+          try {
+            // Use the customerPage's context to wait for the new page
+            // This ensures we only catch pages opened from this specific customer page
+            const customerContext = customerPage.context();
+            const [newPage] = await Promise.all([
+              customerContext.waitForEvent('page', { timeout: 10000 }),
+              customerPage.click(`#products > table > tbody > tr:nth-child(${product.rowIndex}) > td.k-command-cell > a > span`)
+            ]);
+            
+            console.log(`    Opened edit page for product ${product.rowIndex}...`);
+            
+            // Wait for the new page to load
+            await newPage.waitForLoadState('domcontentloaded', { timeout: 30000 });
+            await newPage.waitForTimeout(1000); // Reduced wait time
+            
+            // Scrape the data from the new page
+            const productDetails = await newPage.evaluate(() => {
+              const result = {
+                Product: '',
+                Authorization_Number: '',
+                Authorization_Desc: ''
+              };
+              
+              // Extract Product
+              try {
+                const productElement = document.querySelector('#jobOrder > div.col-md-7.section > div:nth-child(3) > span');
+                if (productElement) {
+                  result.Product = productElement.textContent.trim();
+                }
+              } catch (e) {
+                console.log('Error extracting Product:', e);
+              }
+              
+              // Extract Authorization Number and Authorization Desc from the grid
+              try {
+                const authNumCell = document.querySelector('#grdPayers > div.k-grid-content.k-auto-scrollable > table > tbody > tr > td:nth-child(3)');
+                if (authNumCell) {
+                  result.Authorization_Number = authNumCell.textContent.trim();
+                }
+                
+                const authDescCell = document.querySelector('#grdPayers > div.k-grid-content.k-auto-scrollable > table > tbody > tr > td:nth-child(4)');
+                if (authDescCell) {
+                  result.Authorization_Desc = authDescCell.textContent.trim();
+                }
+              } catch (e) {
+                console.log('Error extracting authorization data:', e);
+              }
+              
+              return result;
+            });
+            
+            allProductDetails.push(productDetails);
+            console.log(`      ✅ Product: "${productDetails.Product}", Auth#: "${productDetails.Authorization_Number}"`);
+            
+            // Close the new page
+            await newPage.close().catch(() => {});
+            // Small delay before next product
+            await new Promise(resolve => setTimeout(resolve, 200));
+            
+          } catch (error) {
+            console.error(`      ❌ Error scraping product ${product.rowIndex}: ${error.message}`);
+          }
+        }
+        } catch (payerProductError) {
+          console.error(`  ⚠️  Error fetching payer/product details: ${payerProductError.message}`);
+          // Continue with empty product details
+        }
+        
+        // Merge all data into a single record for this customer
+        // If there are multiple products, combine them all into one record
         const enhancedRecord = {
           ...record,
           ...additionalData
         };
         
-        outputData.push(enhancedRecord);
-        console.log(`  ✅ Extracted: Sex="${additionalData.Sex}", DOB="${additionalData.DOB}", Address="${additionalData.Address}", Email="${additionalData.Email}"`);
+        // If there are products, combine all products into the record
+        if (allProductDetails.length > 0) {
+          // Combine all products with semicolon separator
+          const products = allProductDetails.map(p => p.Product).filter(p => p).join('; ');
+          const authNumbers = allProductDetails.map(p => p.Authorization_Number).filter(a => a).join('; ');
+          const authDescs = allProductDetails.map(p => p.Authorization_Desc).filter(d => d).join('; ');
+          
+          enhancedRecord.Product = products;
+          enhancedRecord.Authorization_Number = authNumbers;
+          enhancedRecord.Authorization_Desc = authDescs;
+          
+          if (allProductDetails.length > 1) {
+            console.log(`    ℹ️  Customer has ${allProductDetails.length} products, combined into single record`);
+          }
+        }
         
-        // Small delay between requests to avoid overwhelming the server
-        await page.waitForTimeout(500);
+        console.log(`  ✅ Extracted: Sex="${additionalData.Sex}", DOB="${additionalData.DOB}", Address="${additionalData.Address}", Email="${additionalData.Email}", Products: ${allProductDetails.length}`);
+        
+        return enhancedRecord;
         
       } catch (error) {
         console.error(`  ❌ Error fetching details for Customer Number ${customerNumber}: ${error.message}`);
-        // Still add the record without additional data
-        outputData.push(record);
+        // Still return the record without additional data
+        return record;
+      } finally {
+        // Always close the customer page
+        await customerPage.close().catch(() => {});
       }
-    }
+    };
+    
+    // Process all customers with concurrency control
+    const outputData = await Promise.all(
+      recordsToProcess.map((record, index) => 
+        limitConcurrency(() => processCustomer(record, index, recordsToProcess.length))
+      )
+    );
     
     console.log(`\n✅ Completed fetching details for ${outputData.length} records`);
     

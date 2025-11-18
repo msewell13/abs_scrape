@@ -93,7 +93,8 @@ async function runScrapers() {
             console.log('');
             console.log('📤 Sending customer search results to Grist...');
             const data = await loadJsonData(customerFile);
-            // Use Customer Number as key column for matching
+            // Use only Customer Number as key column for matching
+            // All products for a customer are stored in a single record
             await sendToGrist(data, apiKey, server, docName, 'Customer_Search_Results', org, true, ['Customer Number'], docId);
         } else {
             console.log('⚠️  Warning: customer_search_results.json not found after scraper run');
